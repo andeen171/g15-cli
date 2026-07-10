@@ -64,6 +64,18 @@ hwmon. Settings persist to `~/.config/g15/state`.
 where `g15-tui` is a one-line wrapper: `exec sudo ~/.cargo/bin/g15 tui`.
 Autostart: `o.launch_on_start("~/.cargo/bin/g15 restore")`.
 
+The Fn keyboard-backlight key (Fn+F5) emits kernel `KEY_F18` (scancode 0x69),
+which XKB presents as `XF86Launch9` — Dell handles this key in AWCC software on
+Windows, so no kbd-illumination keysym exists. Bind it to the cycle command:
+
+```
+bind = , XF86Launch9, exec, g15 led brightness cycle
+```
+
+Do NOT keep omarchy's default `XF86KbdBrightness*`/`XF86KbdLightOnOff` binds to
+`omarchy-brightness-keyboard` — that writes the SMBIOS LED device and wedges
+the controller (gotcha 4 above).
+
 Only tested on a G15 5520 (Intel). The WMAX fan/power codes come from
 [dell-g-series-controller](https://github.com/cemkaya-mpi/Dell-G-Series-Controller);
 AMD models (AMW3 method) are attempted as a fallback but untested.
