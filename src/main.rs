@@ -21,6 +21,7 @@ LED (no root needed):
 Power/fans (root + acpi_call module):
   g15 power                           show current mode
   g15 power balanced|performance|quiet|battery|gmode
+  g15 power toggle                    gmode <-> previous mode (G key)
   g15 fan                             show fan boost + rpm
   g15 fan boost <0-100>               set boost on both fans
   g15 info                            model, fw, mode, temps, rpm
@@ -166,6 +167,26 @@ fn run() -> Result<(), String> {
                     .map(|(n, _)| *n)
                     .unwrap_or("unknown");
                 println!("{name} ({mode:#x})");
+                Ok(())
+            }
+            Some("toggle") => {
+                let cur = wmax::get_power_mode().map_err(|e| e.to_string())?;
+                let name = if cur == 0xAB {
+                    // leaving gmode: back to whatever was set before it
+                    state::load().get("power_prev").cloned().unwrap_or("balanced".into())
+                } else {
+                    let prev = wmax::POWER_MODES
+                        .iter()
+                        .find(|(_, v)| *v as u32 == cur)
+                        .map(|(n, _)| *n)
+                        .unwrap_or("balanced");
+                    state::set("power_prev", prev).map_err(|e| e.to_string())?;
+                    "gmode".into()
+                };
+                let (_, mode) = wmax::POWER_MODES.iter().find(|(n, _)| *n == name).unwrap();
+                wmax::set_power_mode(*mode).map_err(|e| e.to_string())?;
+                state::set("power", &name).map_err(|e| e.to_string())?;
+                println!("{name}");
                 Ok(())
             }
             Some(name) => {

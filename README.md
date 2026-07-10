@@ -79,6 +79,7 @@ g15 led off | on
 
 sudo g15 power                      show power mode
 sudo g15 power gmode                balanced|performance|quiet|battery|gmode
+sudo g15 power toggle               gmode <-> previous mode (for the G key)
 sudo g15 fan boost 0-100
 sudo g15 info                       model, firmware, temps, fan rpm
 
@@ -104,6 +105,24 @@ bind = , XF86Launch9, exec, g15 led brightness cycle
 ```
 
 sway is identical; for X11 use `xbindkeys` with `XF86Launch9`.
+
+### Keybind: the G-Mode key (Fn+F9)
+
+Fn+F9 emits kernel `KEY_PERFORMANCE` (keycode 701, scancode 0x68). That's above
+XKB's 8-bit keysym range, so there is no keysym — bind it by raw keycode
+(evdev 701 + 8 = 709). Hyprland:
+
+```
+bind = , code:709, exec, sh -c 'notify-send "Power mode" "$(sudo -n g15 power toggle 2>&1)"'
+```
+
+`g15 power toggle` switches to gmode and back to whatever mode you were in
+before, printing the new mode. It needs root without a password prompt:
+
+```sh
+echo "$USER ALL=(root) NOPASSWD: /usr/bin/g15 power toggle" | \
+  sudo tee /etc/sudoers.d/g15-power-toggle && sudo chmod 440 /etc/sudoers.d/g15-power-toggle
+```
 
 ### Autostart (restore LED state at login)
 
