@@ -15,7 +15,7 @@ LED (no root needed):
   g15 led morph RRGGBB RRGGBB [speed] morph between two colors
   g15 led cycle [speed]               morph through the color spectrum
   g15 led rainbow [speed]             moving rainbow across the 4 zones
-  g15 led brightness <0-100>          brightness only
+  g15 led brightness <0-100|cycle>    brightness; cycle = off -> 50% -> 100%
   g15 led off | on
 
 Power/fans (root + acpi_call module):
@@ -69,11 +69,33 @@ fn run() -> Result<(), String> {
                 Some("off") => led.brightness(0),
                 Some("on") => led.brightness(100),
                 Some("brightness") => {
-                    let p: u8 = arg(2)
-                        .and_then(|s| s.parse().ok())
-                        .ok_or("usage: g15 led brightness <0-100>")?;
+                    let p: u8 = match arg(2) {
+                        // off -> 50% -> 100% -> off (bound to the Fn kbd key)
+                        Some("cycle") => {
+                            let cur: u8 = state::load()
+                                .get("brightness")
+                                .and_then(|b| b.parse().ok())
+                                .unwrap_or(100);
+                            if cur < 25 {
+                                50
+                            } else if cur < 75 {
+                                100
+                            } else {
+                                0
+                            }
+                        }
+                        other => other
+                            .and_then(|s| s.parse().ok())
+                            .ok_or("usage: g15 led brightness <0-100|cycle>")?,
+                    };
                     led.brightness(p)
                         .and_then(|()| state::set("brightness", &p.to_string()))
+                        .map_err(|e| e.to_string())?;
+                    // best-effort OSD popup (display-only omarchy helper)
+                    let _ = std::process::Command::new("omarchy-swayosd-kbd-brightness")
+                        .arg(p.to_string())
+                        .spawn();
+                    Ok(())
                 }
                 Some("pulse") => {
                     let hex = arg(2).ok_or("usage: g15 led pulse RRGGBB [speed]")?;
