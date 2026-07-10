@@ -1,0 +1,9 @@
+[package]
+name = "g15"
+version = "0.1.0"
+edition = "2021"
+description = "Dell G15 5520 keyboard backlight + fan/power control"
+
+[dependencies]
+libc = "0.2"
+ratatui = "0.29"
