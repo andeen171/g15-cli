@@ -1,0 +1,4 @@
+# Dell G15 / Alienware AW-ELC keyboard LED controller — allow the logged-in
+# user to control the backlight without root.
+KERNEL=="hidraw*", SUBSYSTEMS=="usb", ATTRS{idVendor}=="187c", ATTRS{idProduct}=="0550", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEMS=="usb", ATTRS{idVendor}=="187c", ATTRS{idProduct}=="0551", TAG+="uaccess"

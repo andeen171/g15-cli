@@ -1,6 +1,7 @@
 # g15
 
-Keyboard backlight, fan, and power-mode control for the Dell G15 5520 on Linux.
+Keyboard backlight, fan, and power-mode control for the Dell G15 5520 on Linux
+(likely works on other AW-ELC G-series models — 5511/5515/5525 — untested).
 Reverse-engineered from Alienware Command Center's USB traffic — see
 [protocol.md](protocol.md) for the full AW-ELC (187c:0550) protocol writeup.
 
@@ -15,67 +16,135 @@ Four reasons, all documented in protocol.md:
 3. The `0x26` command is *dimming*, inverted: `0` = full brightness, `100` = off.
 4. Writes to `/sys/class/leds/dell::kbd_backlight` (Dell SMBIOS) **hard-wedge
    the LED controller** until you cut all power (30 s power button with AC and
-   battery removed). Mask `systemd-backlight@leds:dell::kbd_backlight.service`
-   and remove any idle/keybind hooks that touch that LED device.
+   battery removed). See [Protecting the controller](#protecting-the-controller).
 
 ## Install
 
+### AUR
+
 ```sh
-cargo install --path .
+yay -S g15-cli
 ```
 
-LED control is unprivileged if your user can open the hidraw device (an
-OpenRGB-style udev rule for `187c:0550` with `TAG+="uaccess"` does it).
-Fan/power control needs root plus the `acpi_call` kernel module.
+### From source
+
+```sh
+cargo install --path .
+sudo install -Dm644 99-g15-led.rules /etc/udev/rules.d/99-g15-led.rules
+sudo udevadm control --reload && sudo udevadm trigger
+```
+
+### Fan/power support (optional, needs root)
+
+Fan boost and power modes go through the WMAX ACPI method via the `acpi_call`
+kernel module:
+
+```sh
+sudo pacman -S acpi_call        # or acpi_call-dkms / acpi_call-lts
+echo acpi_call | sudo tee /etc/modules-load.d/acpi_call.conf
+sudo modprobe acpi_call
+```
+
+## Protecting the controller
+
+**Required on every install.** Anything that writes the SMBIOS keyboard-backlight
+LED device will wedge the USB controller until a full power drain:
+
+```sh
+# stop systemd restoring a saved brightness into it at every boot
+sudo systemctl mask 'systemd-backlight@leds:dell::kbd_backlight.service'
+```
+
+Then remove/disable anything else that touches `*::kbd_backlight` via
+`brightnessctl` or sysfs. On Omarchy that means:
+
+- in `~/.config/hypr/hypridle.conf`: delete the listener that runs
+  `brightnessctl -sd '*::kbd_backlight' set 0` on idle
+- never bind keys to `omarchy-brightness-keyboard`
+
+If the backlight stops responding and survives reboots: shut down, unplug AC,
+disconnect the battery (or hold the power button 30 s with both removed), boot.
+The `g15` CLI detects the wedged state and tells you.
 
 ## Usage
 
 ```
-g15 led RRGGBB [brightness]      static color
-g15 led pulse RRGGBB             pulse effect
-g15 led morph RRGGBB RRGGBB      morph between two colors
-g15 led brightness 0-100
+g15 led RRGGBB [brightness 0-100]   static color
+g15 led pulse RRGGBB [speed]        breathe (speed 1-10, default 5)
+g15 led morph RRGGBB RRGGBB [speed] morph between two colors
+g15 led cycle [speed]               morph through the color spectrum
+g15 led rainbow [speed]             moving rainbow across the 4 zones
+g15 led brightness <0-100|cycle>    brightness; cycle = off -> 50% -> 100%
 g15 led off | on
 
-sudo g15 power                   show power mode
-sudo g15 power gmode             balanced|performance|quiet|battery|gmode
+sudo g15 power                      show power mode
+sudo g15 power gmode                balanced|performance|quiet|battery|gmode
 sudo g15 fan boost 0-100
-sudo g15 info                    model, firmware, temps, fan rpm
+sudo g15 info                       model, firmware, temps, fan rpm
 
-g15 tui                          two-tab interactive panel (ratatui)
-g15 waybar                       JSON for a waybar custom module
-g15 restore                      re-apply saved LED state (run at login)
+g15 tui                             interactive panel (root for fan/power tab)
+g15 waybar                          JSON for a waybar custom module
+g15 restore                         re-apply saved LED state (run at login)
 ```
 
-Sensors for `waybar`/`tui` are read root-free from the `alienware_wmi`/`dell_smm`
-hwmon. Settings persist to `~/.config/g15/state`.
+Settings persist to `~/.config/g15/state`; `g15 restore` replays them (the
+firmware loses its animation on every USB re-enumeration, so run it at login).
+Sensors come root-free from the `alienware_wmi`/`dell_smm` hwmon.
 
-## Waybar / Hyprland (Omarchy) integration
+## Desktop integration
 
-```jsonc
-"custom/g15": {
-  "exec": "~/.cargo/bin/g15 waybar",
-  "return-type": "json",
-  "interval": 5,
-  "on-click": "omarchy-launch-or-focus-tui g15-tui"
-}
-```
+### Keybind: the Fn keyboard-backlight key
 
-where `g15-tui` is a one-line wrapper: `exec sudo ~/.cargo/bin/g15 tui`.
-Autostart: `o.launch_on_start("~/.cargo/bin/g15 restore")`.
-
-The Fn keyboard-backlight key (Fn+F5) emits kernel `KEY_F18` (scancode 0x69),
-which XKB presents as `XF86Launch9` — Dell handles this key in AWCC software on
-Windows, so no kbd-illumination keysym exists. Bind it to the cycle command:
+Fn+F5 on the G15 emits kernel `KEY_F18` (scancode 0x69) — Dell handles it in
+AWCC software on Windows, so there is no kbd-illumination keysym. XKB presents
+it as **`XF86Launch9`**. Hyprland:
 
 ```
 bind = , XF86Launch9, exec, g15 led brightness cycle
 ```
 
-Do NOT keep omarchy's default `XF86KbdBrightness*`/`XF86KbdLightOnOff` binds to
-`omarchy-brightness-keyboard` — that writes the SMBIOS LED device and wedges
-the controller (gotcha 4 above).
+sway is identical; for X11 use `xbindkeys` with `XF86Launch9`.
 
-Only tested on a G15 5520 (Intel). The WMAX fan/power codes come from
-[dell-g-series-controller](https://github.com/cemkaya-mpi/Dell-G-Series-Controller);
-AMD models (AMW3 method) are attempted as a fallback but untested.
+### Autostart (restore LED state at login)
+
+Hyprland: `exec-once = g15 restore` (Omarchy lua config:
+`o.launch_on_start("g15 restore")` in `~/.config/hypr/autostart.lua`).
+
+### Waybar module
+
+```jsonc
+"custom/g15": {
+  "exec": "g15 waybar",
+  "return-type": "json",
+  "interval": 5,
+  "on-click": "alacritty --class=g15-tui -e sudo g15 tui"
+}
+```
+
+Shows CPU/GPU temps in the bar, fans + power mode on hover. On Omarchy, use
+`"on-click": "omarchy-launch-or-focus-tui g15-tui"` with a `g15-tui` wrapper
+script on PATH (`exec sudo g15 tui`) to get the standard floating TUI window,
+and float it in `~/.config/hypr/apps.lua`:
+
+```lua
+o.window("org.omarchy.g15-tui", { tag = "+floating-window" })
+```
+
+### Example profile binds
+
+```
+bind = SUPER, F1, exec, g15 led 00ff88 && sudo g15 power quiet
+bind = SUPER, F2, exec, g15 led rainbow 7 && sudo g15 power gmode
+```
+
+(`sudo` in binds needs a NOPASSWD sudoers entry for `/usr/bin/g15`, or route
+power changes through the TUI instead.)
+
+## Notes
+
+- Only tested on a G15 5520 (Intel). The WMAX fan/power codes come from
+  [dell-g-series-controller](https://github.com/cemkaya-mpi/Dell-G-Series-Controller);
+  AMD models (AMW3 method) are attempted as a fallback but untested.
+- The TUI's screen color picker uses `hyprpicker` (optional).
+- MIT licensed. Protocol notes in [protocol.md](protocol.md) are the
+  interesting part if you're porting this to another OS or tool.
