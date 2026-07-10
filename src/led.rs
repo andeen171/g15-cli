@@ -15,8 +15,14 @@ const DIM_ZONE_COUNT: u8 = 0x14; // dimming addresses zones 0x00..0x13
 type Action = (u8, u16, u16, u8, u8, u8);
 
 /// The 7 colors AWCC's spectrum/wave effects use, straight from the capture.
-const SPECTRUM: [u32; 7] = [
-    0xFF0000, 0xFFA500, 0xFFFF00, 0x008000, 0x00BFFF, 0x0000FF, 0x800080,
+pub const SPECTRUM: [(u8, u8, u8); 7] = [
+    (0xFF, 0x00, 0x00),
+    (0xFF, 0xA5, 0x00),
+    (0xFF, 0xFF, 0x00),
+    (0x00, 0x80, 0x00),
+    (0x00, 0xBF, 0xFF),
+    (0x00, 0x00, 0xFF),
+    (0x80, 0x00, 0x80),
 ];
 
 /// speed 1 (slow) .. 10 (fast) -> (duration, tempo). Capture reference points:
@@ -27,19 +33,19 @@ fn timing(speed: u8) -> (u16, u16) {
     (dur as u16, (dur / 20).max(15) as u16)
 }
 
-fn spectrum_actions(speed: u8, offset: usize) -> Vec<Action> {
+fn morph_actions(colors: &[(u8, u8, u8)], speed: u8, offset: usize) -> Vec<Action> {
     let (dur, tempo) = timing(speed);
-    (0..SPECTRUM.len())
+    (0..colors.len())
         .map(|i| {
-            let c = SPECTRUM[(i + offset) % SPECTRUM.len()];
-            (0x02, dur, tempo, (c >> 16) as u8, (c >> 8) as u8, c as u8)
+            let (r, g, b) = colors[(i + offset) % colors.len()];
+            (0x02, dur, tempo, r, g, b)
         })
         .collect()
 }
 
 // _IOC(read|write, 'H', nr, size): buffer = report-number byte + 33 data bytes
 const fn ioc(nr: u32) -> u64 {
-    (3 << 30) | (34 << 16) | (('H' as u64) << 8) as u64 | nr as u64
+    (3 << 30) | (34 << 16) | (('H' as u64) << 8) | nr as u64
 }
 const HIDIOCGINPUT: u64 = ioc(0x0A);
 const HIDIOCSOUTPUT: u64 = ioc(0x0B);
@@ -159,21 +165,25 @@ impl Led {
         )])
     }
 
-    /// Morph through the 7-color spectrum on all zones together
-    /// (AWCC's "spectrum" — captured as 7 chained 0x02 actions).
-    pub fn cycle(&self, speed: u8) -> io::Result<()> {
-        self.play(&[(&ZONES, spectrum_actions(speed, 0))])
+    /// Morph through a color list on all zones together
+    /// (AWCC's "spectrum" — captured as chained 0x02 actions).
+    pub fn cycle(&self, colors: &[(u8, u8, u8)], speed: u8) -> io::Result<()> {
+        self.play(&[(&ZONES, morph_actions(colors, speed, 0))])
     }
 
-    /// Same spectrum but each zone offset in the cycle — a moving rainbow
+    /// Same cycle but each zone offset in the list — a moving rainbow
     /// across the 4 zones (AWCC's "wave": per-zone series, rotated colors).
-    pub fn rainbow(&self, speed: u8) -> io::Result<()> {
+    pub fn rainbow(&self, colors: &[(u8, u8, u8)], speed: u8) -> io::Result<()> {
         let groups: Vec<(&[u8], Vec<Action>)> = ZONES
             .iter()
             .enumerate()
-            // ponytail: offsets 0/2/4/6 spread the 7-color wheel across zones;
-            // AWCC's exact per-zone rotation is odder and no prettier
-            .map(|(i, z)| (std::slice::from_ref(z), spectrum_actions(speed, i * 2)))
+            // spread the color list evenly across the 4 zones
+            .map(|(i, z)| {
+                (
+                    std::slice::from_ref(z),
+                    morph_actions(colors, speed, i * colors.len() / ZONES.len()),
+                )
+            })
             .collect();
         self.play(&groups)
     }

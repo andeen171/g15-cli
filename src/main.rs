@@ -30,6 +30,15 @@ Desktop integration:
   g15 waybar                          JSON stats for a waybar custom module
   g15 restore                         re-apply saved LED state (autostart)";
 
+/// Color list an effect was last configured with (TUI or CLI), else spectrum.
+fn saved_colors(effect: &str) -> Vec<(u8, u8, u8)> {
+    state::load()
+        .get(&format!("colors_{effect}"))
+        .map(|l| l.split(',').filter_map(|h| parse_rgb(h).ok()).collect::<Vec<_>>())
+        .filter(|v| v.len() >= 2)
+        .unwrap_or_else(|| led::SPECTRUM.to_vec())
+}
+
 fn parse_speed(s: Option<&str>) -> Result<u8, String> {
     match s {
         None => Ok(5),
@@ -73,7 +82,7 @@ fn run() -> Result<(), String> {
                     led.pulse(r, g, b, speed).and_then(|()| {
                         state::set("effect", "pulse")?;
                         state::set("speed", &speed.to_string())?;
-                        state::set("color", hex.trim_start_matches('#'))
+                        state::set("colors_pulse", hex.trim_start_matches('#'))
                     })
                 }
                 Some("morph") => {
@@ -84,20 +93,28 @@ fn run() -> Result<(), String> {
                     led.morph(c1, c2, speed).and_then(|()| {
                         state::set("effect", "morph")?;
                         state::set("speed", &speed.to_string())?;
-                        state::set("color", h1.trim_start_matches('#'))?;
-                        state::set("color2", h2.trim_start_matches('#'))
+                        state::set(
+                            "colors_morph",
+                            &format!(
+                                "{},{}",
+                                h1.trim_start_matches('#'),
+                                h2.trim_start_matches('#')
+                            ),
+                        )
                     })
                 }
                 Some("cycle") => {
                     let speed = parse_speed(arg(2))?;
-                    led.cycle(speed).and_then(|()| {
+                    let colors = saved_colors("cycle");
+                    led.cycle(&colors, speed).and_then(|()| {
                         state::set("effect", "cycle")?;
                         state::set("speed", &speed.to_string())
                     })
                 }
                 Some("rainbow") => {
                     let speed = parse_speed(arg(2))?;
-                    led.rainbow(speed).and_then(|()| {
+                    let colors = saved_colors("rainbow");
+                    led.rainbow(&colors, speed).and_then(|()| {
                         state::set("effect", "rainbow")?;
                         state::set("speed", &speed.to_string())
                     })
@@ -111,7 +128,7 @@ fn run() -> Result<(), String> {
                     }
                     led.color(r, g, b).and_then(|()| {
                         state::set("effect", "static")?;
-                        state::set("color", color.trim_start_matches('#'))
+                        state::set("colors_static", color.trim_start_matches('#'))
                     })
                 }
                 None => Err(std::io::Error::other("missing led argument, see g15 --help")),
@@ -177,18 +194,19 @@ fn run() -> Result<(), String> {
                 .and_then(|b| b.parse().ok())
                 .unwrap_or(100);
             led.brightness(brightness).map_err(|e| e.to_string())?;
-            let color = saved.get("color").map(String::as_str).unwrap_or("ffffff");
-            let (r, g, b) = parse_rgb(color)?;
             let speed = parse_speed(saved.get("speed").map(String::as_str)).unwrap_or(5);
-            match saved.get("effect").map(String::as_str) {
-                Some("pulse") => led.pulse(r, g, b, speed),
-                Some("morph") => {
-                    let c2 = parse_rgb(saved.get("color2").map(String::as_str).unwrap_or("0066ff"))?;
-                    led.morph((r, g, b), c2, speed)
-                }
-                Some("cycle") => led.cycle(speed),
-                Some("rainbow") => led.rainbow(speed),
-                _ => led.color(r, g, b),
+            let effect = saved.get("effect").map(String::as_str).unwrap_or("static");
+            let colors = saved_colors(effect); // >=2 entries or spectrum
+            let one = saved
+                .get(&format!("colors_{effect}"))
+                .and_then(|l| parse_rgb(l.split(',').next().unwrap_or("")).ok())
+                .unwrap_or((255, 255, 255));
+            match effect {
+                "pulse" => led.pulse(one.0, one.1, one.2, speed),
+                "morph" => led.morph(colors[0], colors[1], speed),
+                "cycle" => led.cycle(&colors, speed),
+                "rainbow" => led.rainbow(&colors, speed),
+                _ => led.color(one.0, one.1, one.2),
             }
             .map_err(|e| e.to_string())
         }
