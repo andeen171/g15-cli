@@ -21,13 +21,15 @@ const COLORS: [(&str, u32); 9] = [
     ("purple", 0x8800FF),
     ("pink", 0xFF00AA),
 ];
-const EFFECTS: [&str; 3] = ["static", "pulse", "morph"];
+const EFFECTS: [&str; 5] = ["static", "pulse", "morph", "cycle", "rainbow"];
 
 struct App {
     tab: usize,
     row: usize,
     color: usize,
+    color2: usize,
     effect: usize,
+    speed: u8,
     brightness: u8,
     power: usize,
     boost: u8,
@@ -47,17 +49,34 @@ impl App {
             .and_then(|c| u32::from_str_radix(c, 16).ok())
             .and_then(|v| COLORS.iter().position(|(_, hex)| *hex == v))
             .unwrap_or(0);
+        let color2 = s
+            .get("color2")
+            .and_then(|c| u32::from_str_radix(c, 16).ok())
+            .and_then(|v| COLORS.iter().position(|(_, hex)| *hex == v))
+            .unwrap_or(6); // blue
         let effect = s
             .get("effect")
             .and_then(|e| EFFECTS.iter().position(|n| n == e))
             .unwrap_or(0);
+        let speed = s.get("speed").and_then(|v| v.parse().ok()).unwrap_or(5);
         let brightness = s.get("brightness").and_then(|b| b.parse().ok()).unwrap_or(100);
         let power = wmax::get_power_mode()
             .ok()
             .and_then(|m| wmax::POWER_MODES.iter().position(|(_, v)| *v as u32 == m))
             .unwrap_or(0);
         let boost = wmax::fan_boost(0).unwrap_or(0) as u8;
-        App { tab: 0, row: 0, color, effect, brightness, power, boost, status: String::new() }
+        App {
+            tab: 0,
+            row: 0,
+            color,
+            color2,
+            effect,
+            speed,
+            brightness,
+            power,
+            boost,
+            status: String::new(),
+        }
     }
 
     fn apply_led(&mut self) {
@@ -65,19 +84,19 @@ impl App {
             l.brightness(self.brightness)?;
             let c = rgb(self.color);
             match EFFECTS[self.effect] {
-                "pulse" => l.pulse(c.0, c.1, c.2),
-                "morph" => l.morph(c, rgb((self.color + 3) % COLORS.len())),
+                "pulse" => l.pulse(c.0, c.1, c.2, self.speed),
+                "morph" => l.morph(c, rgb(self.color2), self.speed),
+                "cycle" => l.cycle(self.speed),
+                "rainbow" => l.rainbow(self.speed),
                 _ => l.color(c.0, c.1, c.2),
             }
         });
         self.status = match result {
             Ok(()) => {
                 let _ = state::set("color", &format!("{:06x}", COLORS[self.color].1));
-                let _ = state::set(
-                    "color2",
-                    &format!("{:06x}", COLORS[(self.color + 3) % COLORS.len()].1),
-                );
+                let _ = state::set("color2", &format!("{:06x}", COLORS[self.color2].1));
                 let _ = state::set("effect", EFFECTS[self.effect]);
+                let _ = state::set("speed", &self.speed.to_string());
                 let _ = state::set("brightness", &self.brightness.to_string());
                 format!("applied {} {}", EFFECTS[self.effect], COLORS[self.color].0)
             }
@@ -115,10 +134,18 @@ impl App {
                 self.apply_led();
             }
             (0, 1) => {
-                self.effect = cycle(self.effect, EFFECTS.len());
+                self.color2 = cycle(self.color2, COLORS.len());
                 self.apply_led();
             }
             (0, 2) => {
+                self.effect = cycle(self.effect, EFFECTS.len());
+                self.apply_led();
+            }
+            (0, 3) => {
+                self.speed = (self.speed as i32 + dir).clamp(1, 10) as u8;
+                self.apply_led();
+            }
+            (0, 4) => {
                 self.brightness = step(self.brightness);
                 self.apply_led();
             }
@@ -148,7 +175,7 @@ fn row_line(selected: bool, label: &str, value: String) -> Line<'static> {
 fn draw(f: &mut Frame, app: &App, stats: &Option<hwmon::Stats>) {
     let [tabs_a, body_a, gauge_a, stats_a, status_a] = Layout::vertical([
         Constraint::Length(1),
-        Constraint::Length(5),
+        Constraint::Length(7),
         Constraint::Length(3),
         Constraint::Length(4),
         Constraint::Length(1),
@@ -164,11 +191,27 @@ fn draw(f: &mut Frame, app: &App, stats: &Option<hwmon::Stats>) {
     );
 
     let (rows, gauge_val, gauge_label): (Vec<Line>, u8, &str) = if app.tab == 0 {
+        // color2 only matters for morph; speed only for animated effects
+        let animated = app.effect != 0;
         (
             vec![
                 row_line(app.row == 0, "Color", COLORS[app.color].0.into()),
-                row_line(app.row == 1, "Effect", EFFECTS[app.effect].into()),
-                row_line(app.row == 2, "Brightness", format!("{}%", app.brightness)),
+                row_line(
+                    app.row == 1,
+                    "Color 2",
+                    if EFFECTS[app.effect] == "morph" {
+                        COLORS[app.color2].0.into()
+                    } else {
+                        "—".into()
+                    },
+                ),
+                row_line(app.row == 2, "Effect", EFFECTS[app.effect].into()),
+                row_line(
+                    app.row == 3,
+                    "Speed",
+                    if animated { format!("{}/10", app.speed) } else { "—".into() },
+                ),
+                row_line(app.row == 4, "Brightness", format!("{}%", app.brightness)),
             ],
             app.brightness,
             "brightness",
@@ -227,7 +270,7 @@ pub fn run() -> std::io::Result<()> {
         if event::poll(Duration::from_secs(1)).unwrap_or(false) {
             match event::read() {
                 Ok(Event::Key(k)) if k.kind == KeyEventKind::Press => {
-                    let rows = if app.tab == 0 { 3 } else { 2 };
+                    let rows = if app.tab == 0 { 5 } else { 2 };
                     match k.code {
                         KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
                         KeyCode::Tab | KeyCode::BackTab => {

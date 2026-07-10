@@ -11,6 +11,32 @@ use std::os::fd::AsRawFd;
 const ZONES: [u8; 4] = [0x10, 0x11, 0x12, 0x13];
 const DIM_ZONE_COUNT: u8 = 0x14; // dimming addresses zones 0x00..0x13
 
+/// (effect, duration, tempo, r, g, b)
+type Action = (u8, u16, u16, u8, u8, u8);
+
+/// The 7 colors AWCC's spectrum/wave effects use, straight from the capture.
+const SPECTRUM: [u32; 7] = [
+    0xFF0000, 0xFFA500, 0xFFFF00, 0x008000, 0x00BFFF, 0x0000FF, 0x800080,
+];
+
+/// speed 1 (slow) .. 10 (fast) -> (duration, tempo). Capture reference points:
+/// pulse 2000/100, morph 1500/100, spectrum 642/15, wave 428/15.
+fn timing(speed: u8) -> (u16, u16) {
+    let s = speed.clamp(1, 10) as u32;
+    let dur = 3200 - 300 * s;
+    (dur as u16, (dur / 20).max(15) as u16)
+}
+
+fn spectrum_actions(speed: u8, offset: usize) -> Vec<Action> {
+    let (dur, tempo) = timing(speed);
+    (0..SPECTRUM.len())
+        .map(|i| {
+            let c = SPECTRUM[(i + offset) % SPECTRUM.len()];
+            (0x02, dur, tempo, (c >> 16) as u8, (c >> 8) as u8, c as u8)
+        })
+        .collect()
+}
+
 // _IOC(read|write, 'H', nr, size): buffer = report-number byte + 33 data bytes
 const fn ioc(nr: u32) -> u64 {
     (3 << 30) | (34 << 16) | (('H' as u64) << 8) as u64 | nr as u64
@@ -80,48 +106,76 @@ impl Led {
         Ok(())
     }
 
-    /// Apply actions to all zones as the RUNNING animation (what AWCC does).
+    /// One animation with per-zone-group action lists (what AWCC does).
     /// Each action: (effect, duration, tempo, r, g, b). Max 3 per report.
-    fn apply(&self, actions: &[(u8, u16, u16, u8, u8, u8)]) -> io::Result<()> {
+    fn play(&self, groups: &[(&[u8], Vec<Action>)]) -> io::Result<()> {
         self.anim(0x01, 0xFFFF)?; // start new RUNNING animation
-        let mut series = vec![0x23, 0x01, 0x00, ZONES.len() as u8];
-        series.extend_from_slice(&ZONES);
-        self.cmd(&series)?;
-        for chunk in actions.chunks(3) {
-            let mut p = vec![0x24];
-            for &(effect, dur, tempo, r, g, b) in chunk {
-                p.extend_from_slice(&[
-                    effect,
-                    (dur >> 8) as u8,
-                    dur as u8,
-                    (tempo >> 8) as u8,
-                    tempo as u8,
-                    r,
-                    g,
-                    b,
-                ]);
+        for (zones, actions) in groups {
+            let mut series = vec![0x23, 0x01, 0x00, zones.len() as u8];
+            series.extend_from_slice(zones);
+            self.cmd(&series)?;
+            for chunk in actions.chunks(3) {
+                let mut p = vec![0x24];
+                for &(effect, dur, tempo, r, g, b) in chunk {
+                    p.extend_from_slice(&[
+                        effect,
+                        (dur >> 8) as u8,
+                        dur as u8,
+                        (tempo >> 8) as u8,
+                        tempo as u8,
+                        r,
+                        g,
+                        b,
+                    ]);
+                }
+                self.cmd(&p)?;
             }
-            self.cmd(&p)?;
         }
         self.anim(0x03, 0x00FF) // finish-play RUNNING
     }
 
     pub fn color(&self, r: u8, g: u8, b: u8) -> io::Result<()> {
-        self.dim(0)?;
-        self.apply(&[(0x00, 0x07D0, 0x00FA, r, g, b)])
+        self.play(&[(&ZONES, vec![(0x00, 0x07D0, 0x00FA, r, g, b)])])
     }
 
-    pub fn pulse(&self, r: u8, g: u8, b: u8) -> io::Result<()> {
-        self.dim(0)?;
-        self.apply(&[(0x01, 0x07D0, 0x0064, r, g, b)])
+    /// Smooth breathe: firmware effect 0x01 is a hard blink, so pulse is a
+    /// morph pair color -> black -> color; dimming still caps the max level.
+    pub fn pulse(&self, r: u8, g: u8, b: u8, speed: u8) -> io::Result<()> {
+        let (dur, tempo) = timing(speed);
+        self.play(&[(
+            &ZONES,
+            vec![(0x02, dur, tempo, r, g, b), (0x02, dur, tempo, 0, 0, 0)],
+        )])
     }
 
-    pub fn morph(&self, c1: (u8, u8, u8), c2: (u8, u8, u8)) -> io::Result<()> {
-        self.dim(0)?;
-        self.apply(&[
-            (0x02, 0x05DC, 0x0064, c1.0, c1.1, c1.2),
-            (0x02, 0x05DC, 0x0064, c2.0, c2.1, c2.2),
-        ])
+    pub fn morph(&self, c1: (u8, u8, u8), c2: (u8, u8, u8), speed: u8) -> io::Result<()> {
+        let (dur, tempo) = timing(speed);
+        self.play(&[(
+            &ZONES,
+            vec![
+                (0x02, dur, tempo, c1.0, c1.1, c1.2),
+                (0x02, dur, tempo, c2.0, c2.1, c2.2),
+            ],
+        )])
+    }
+
+    /// Morph through the 7-color spectrum on all zones together
+    /// (AWCC's "spectrum" — captured as 7 chained 0x02 actions).
+    pub fn cycle(&self, speed: u8) -> io::Result<()> {
+        self.play(&[(&ZONES, spectrum_actions(speed, 0))])
+    }
+
+    /// Same spectrum but each zone offset in the cycle — a moving rainbow
+    /// across the 4 zones (AWCC's "wave": per-zone series, rotated colors).
+    pub fn rainbow(&self, speed: u8) -> io::Result<()> {
+        let groups: Vec<(&[u8], Vec<Action>)> = ZONES
+            .iter()
+            .enumerate()
+            // ponytail: offsets 0/2/4/6 spread the 7-color wheel across zones;
+            // AWCC's exact per-zone rotation is odder and no prettier
+            .map(|(i, z)| (std::slice::from_ref(z), spectrum_actions(speed, i * 2)))
+            .collect();
+        self.play(&groups)
     }
 
     /// brightness 0-100; the 0x26 command is DIMMING (inverted).

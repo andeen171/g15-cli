@@ -11,8 +11,10 @@ g15 — Dell G15 5520 keyboard backlight + fan/power control
 
 LED (no root needed):
   g15 led RRGGBB [brightness 0-100]   static color
-  g15 led pulse RRGGBB                pulse effect
-  g15 led morph RRGGBB RRGGBB         morph between two colors
+  g15 led pulse RRGGBB [speed]        pulse effect (speed 1-10, default 5)
+  g15 led morph RRGGBB RRGGBB [speed] morph between two colors
+  g15 led cycle [speed]               morph through the color spectrum
+  g15 led rainbow [speed]             moving rainbow across the 4 zones
   g15 led brightness <0-100>          brightness only
   g15 led off | on
 
@@ -27,6 +29,16 @@ Desktop integration:
   g15 tui                             interactive two-tab control panel
   g15 waybar                          JSON stats for a waybar custom module
   g15 restore                         re-apply saved LED state (autostart)";
+
+fn parse_speed(s: Option<&str>) -> Result<u8, String> {
+    match s {
+        None => Ok(5),
+        Some(v) => match v.parse::<u8>() {
+            Ok(n @ 1..=10) => Ok(n),
+            _ => Err(format!("speed must be 1-10, got '{v}'")),
+        },
+    }
+}
 
 fn parse_rgb(s: &str) -> Result<(u8, u8, u8), String> {
     let s = s.trim_start_matches('#');
@@ -55,21 +67,39 @@ fn run() -> Result<(), String> {
                         .and_then(|()| state::set("brightness", &p.to_string()))
                 }
                 Some("pulse") => {
-                    let hex = arg(2).ok_or("usage: g15 led pulse RRGGBB")?;
+                    let hex = arg(2).ok_or("usage: g15 led pulse RRGGBB [speed]")?;
                     let (r, g, b) = parse_rgb(hex)?;
-                    led.pulse(r, g, b).and_then(|()| {
+                    let speed = parse_speed(arg(3))?;
+                    led.pulse(r, g, b, speed).and_then(|()| {
                         state::set("effect", "pulse")?;
+                        state::set("speed", &speed.to_string())?;
                         state::set("color", hex.trim_start_matches('#'))
                     })
                 }
                 Some("morph") => {
-                    let h1 = arg(2).ok_or("usage: g15 led morph RRGGBB RRGGBB")?;
-                    let h2 = arg(3).ok_or("usage: g15 led morph RRGGBB RRGGBB")?;
+                    let h1 = arg(2).ok_or("usage: g15 led morph RRGGBB RRGGBB [speed]")?;
+                    let h2 = arg(3).ok_or("usage: g15 led morph RRGGBB RRGGBB [speed]")?;
                     let (c1, c2) = (parse_rgb(h1)?, parse_rgb(h2)?);
-                    led.morph(c1, c2).and_then(|()| {
+                    let speed = parse_speed(arg(4))?;
+                    led.morph(c1, c2, speed).and_then(|()| {
                         state::set("effect", "morph")?;
+                        state::set("speed", &speed.to_string())?;
                         state::set("color", h1.trim_start_matches('#'))?;
                         state::set("color2", h2.trim_start_matches('#'))
+                    })
+                }
+                Some("cycle") => {
+                    let speed = parse_speed(arg(2))?;
+                    led.cycle(speed).and_then(|()| {
+                        state::set("effect", "cycle")?;
+                        state::set("speed", &speed.to_string())
+                    })
+                }
+                Some("rainbow") => {
+                    let speed = parse_speed(arg(2))?;
+                    led.rainbow(speed).and_then(|()| {
+                        state::set("effect", "rainbow")?;
+                        state::set("speed", &speed.to_string())
                     })
                 }
                 Some(color) => {
@@ -132,8 +162,8 @@ fn run() -> Result<(), String> {
             let power = saved.get("power").map(String::as_str).unwrap_or("?");
             match hwmon::read() {
                 Ok(s) => println!(
-                    "{{\"text\": \"󰌌 {}° 󰈐{}\", \"tooltip\": \"CPU {}°C   GPU {}°C\\nCPU fan {} rpm\\nGPU fan {} rpm\\npower: {}\"}}",
-                    s.cpu, s.fan1, s.cpu, s.gpu, s.fan1, s.fan2, power
+                    "{{\"text\": \"󰍛 {}°  󰢮 {}°\", \"tooltip\": \"CPU {}°C — fan {} rpm\\nGPU {}°C — fan {} rpm\\npower: {}\"}}",
+                    s.cpu, s.gpu, s.cpu, s.fan1, s.gpu, s.fan2, power
                 ),
                 Err(_) => println!("{{\"text\": \"󰌌\", \"tooltip\": \"sensors unavailable\"}}"),
             }
@@ -149,12 +179,15 @@ fn run() -> Result<(), String> {
             led.brightness(brightness).map_err(|e| e.to_string())?;
             let color = saved.get("color").map(String::as_str).unwrap_or("ffffff");
             let (r, g, b) = parse_rgb(color)?;
+            let speed = parse_speed(saved.get("speed").map(String::as_str)).unwrap_or(5);
             match saved.get("effect").map(String::as_str) {
-                Some("pulse") => led.pulse(r, g, b),
+                Some("pulse") => led.pulse(r, g, b, speed),
                 Some("morph") => {
                     let c2 = parse_rgb(saved.get("color2").map(String::as_str).unwrap_or("0066ff"))?;
-                    led.morph((r, g, b), c2)
+                    led.morph((r, g, b), c2, speed)
                 }
+                Some("cycle") => led.cycle(speed),
+                Some("rainbow") => led.rainbow(speed),
                 _ => led.color(r, g, b),
             }
             .map_err(|e| e.to_string())
