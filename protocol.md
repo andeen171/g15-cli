@@ -78,7 +78,10 @@ returns short status acks (`03 26 64 00 00...`, `03 23 00`, `03 24 00`) as seen 
 the working Windows fn-trigger capture. Echo-style acks = wedged.
 
 Recovery: `USBDEVFS_RESET` ioctl on /dev/bus/usb/BBB/DDD flipped the acks back to
-healthy style (firmware restart). Hard fallback: EC reset — power btn 30 s with AC
+healthy style (firmware restart) — **once**. On the 2026-07-10 wedge it did not:
+repeated USBDEVFS_RESET, root-hub port power cycle (`usb3-port7/disable`), and
+re-enumeration all left echo-mode acks intact, so the state lives on the EC's
+standby rail, not the USB function. Hard fallback: EC reset — power btn 30 s with AC
 and battery disconnected; the wedge survives warm reboots and even S5 (5 V standby).
 Wedge trigger is still unconfirmed: candidates are the enumeration port reset at
 Linux boot, OpenRGB probing it, or the old device.reset() experiments.
@@ -94,6 +97,15 @@ at boot, hypridle idle listener (330 s), omarchy-brightness-keyboard keybind.
 All must be disabled: hypridle listener commented out in ~/.config/hypr/hypridle.conf,
 systemd unit masked (`systemctl mask 'systemd-backlight@leds:dell::kbd_backlight.service'`),
 never run brightnessctl against `*::kbd_backlight`.
+
+**2026-07-10 wedge — SMBIOS writers ruled out for this instance.** Wedged again
+with the systemd unit still masked, hypridle listener still disabled, LED trigger
+`[none]`, and zero kbd_backlight/brightnessctl journal entries. New activity that
+day: WMAX power-mode toggling (`0x15` mode set + `0x25` G-mode flag, ~6 switches
+balanced<->gmode) and physical Fn+F9 (KEY_PERFORMANCE) presses. The WMAX G-mode
+path (ACPI → EC) is the prime suspect for this instance; unconfirmed — controlled
+test after EC reset: verify healthy acks → toggle gmode once → re-check acks →
+toggle back → re-check.
 
 Working reference: `led-test.py` (`python3 led-test.py RR GG BB [dim]`, no root
 needed with the uaccess udev rule / existing ACL on /dev/hidraw0).
