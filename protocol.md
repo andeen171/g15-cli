@@ -122,10 +122,14 @@ a `dell-privacy` WMI event at exactly 17:50:03 (the SMBIOS call) → probe WEDGE
 manual lock) wedged the controller — which also explains the 2026-07-10 wedge
 (machine idle-locked while unattended) and likely exonerates the WMAX G-mode
 path. A Hyprland/compositor crash 2 min later (17:52:47, after an NVIDIA "HDMI
-FRL link training failed") was unrelated to the wedge. Fix: guard at the top of
-`~/.local/share/omarchy/bin/omarchy-brightness-keyboard` reroutes off/restore/
-cycle to `g15` (USB path) when dell::kbd_backlight exists — note omarchy updates
-may overwrite it; the watchdog will catch a regression.
+FRL link training failed") was unrelated to the wedge. Fix (update-proof): a
+shim at `~/.local/bin/omarchy-brightness-keyboard` reroutes off/restore/cycle
+to `g15` (USB path), and `~/.config/uwsm/env` prepends `~/.local/bin` to PATH
+so it shadows omarchy's copy in every session process (all callers use the bare
+name). The omarchy repo stays pristine, so updates pull cleanly. Blacklisting
+`dell_laptop` (which creates the LED) was rejected: it also provides the
+battery charge-control thresholds in use here. The 2-min watchdog stays as the
+tripwire for any new writer.
 
 Working reference: `led-test.py` (`python3 led-test.py RR GG BB [dim]`, no root
 needed with the uaccess udev rule / existing ACL on /dev/hidraw0).

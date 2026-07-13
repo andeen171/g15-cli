@@ -62,9 +62,12 @@ Then remove/disable anything else that touches `*::kbd_backlight` via
   `brightnessctl -sd '*::kbd_backlight' set 0` on idle
 - never bind keys to `omarchy-brightness-keyboard` — and note that
   `omarchy-system-lock` calls `omarchy-brightness-keyboard off` 3 s after
-  locking, so **every idle/manual lock wedges the controller**. Guard the top of
-  `omarchy-brightness-keyboard` to reroute to `g15` when
-  `/sys/class/leds/dell::kbd_backlight` exists
+  locking, so **every idle/manual lock wedges the controller**. Shadow it with
+  an update-proof shim: put a `omarchy-brightness-keyboard` script in
+  `~/.local/bin` that maps `off`→`g15 led off`, `restore`→`g15 restore`, and
+  everything else→`g15 led brightness cycle`, then make `~/.local/bin` precede
+  omarchy's bin dir by appending `export PATH=$HOME/.local/bin:$PATH` to
+  `~/.config/uwsm/env` (user config — survives omarchy updates)
 - `/usr/lib/systemd/system-sleep/keyboard-backlight` writes it before every
   hibernate — delete it or add `[[ -e /sys/class/leds/dell::kbd_backlight ]] && exit 0`
   near the top
