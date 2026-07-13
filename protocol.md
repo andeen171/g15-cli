@@ -96,7 +96,10 @@ the fn-trigger capture proves it). Writers on omarchy: systemd-backlight restore
 at boot, hypridle idle listener (330 s), omarchy-brightness-keyboard keybind.
 All must be disabled: hypridle listener commented out in ~/.config/hypr/hypridle.conf,
 systemd unit masked (`systemctl mask 'systemd-backlight@leds:dell::kbd_backlight.service'`),
-never run brightnessctl against `*::kbd_backlight`.
+never run brightnessctl against `*::kbd_backlight`. Fourth writer found 2026-07-13:
+`/usr/lib/systemd/system-sleep/keyboard-backlight` (omarchy's ASUS hibernate fix)
+runs `brightnessctl -d *kbd_backlight* set 0` pre-hibernate — was non-executable
+here so it never fired, but it's now guarded with an early exit on dell hardware.
 
 **2026-07-10 wedge — SMBIOS writers ruled out for this instance.** Wedged again
 with the systemd unit still masked, hypridle listener still disabled, LED trigger
@@ -105,7 +108,11 @@ day: WMAX power-mode toggling (`0x15` mode set + `0x25` G-mode flag, ~6 switches
 balanced<->gmode) and physical Fn+F9 (KEY_PERFORMANCE) presses. The WMAX G-mode
 path (ACPI → EC) is the prime suspect for this instance; unconfirmed — controlled
 test after EC reset: verify healthy acks → toggle gmode once → re-check acks →
-toggle back → re-check.
+toggle back → re-check. Sleep/hibernate ruled out for this instance (journal shows
+zero suspend/hibernate cycles since 2026-07-09). A wedge watchdog now probes the
+controller every 2 min (`~/.local/bin/g15-wedge-watch`, systemd user timer): logs
+transitions to `~/.local/state/g15-wedge-watch.log` and snapshots the journal +
+g15 state on OK→WEDGED, to timestamp the next wedge precisely.
 
 Working reference: `led-test.py` (`python3 led-test.py RR GG BB [dim]`, no root
 needed with the uaccess udev rule / existing ACL on /dev/hidraw0).

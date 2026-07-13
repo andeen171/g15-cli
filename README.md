@@ -61,6 +61,9 @@ Then remove/disable anything else that touches `*::kbd_backlight` via
 - in `~/.config/hypr/hypridle.conf`: delete the listener that runs
   `brightnessctl -sd '*::kbd_backlight' set 0` on idle
 - never bind keys to `omarchy-brightness-keyboard`
+- `/usr/lib/systemd/system-sleep/keyboard-backlight` writes it before every
+  hibernate — delete it or add `[[ -e /sys/class/leds/dell::kbd_backlight ]] && exit 0`
+  near the top
 
 If the backlight stops responding and survives reboots: shut down, unplug AC,
 disconnect the battery (or hold the power button 30 s with both removed), boot.
