@@ -64,6 +64,11 @@ impl Led {
             if content.to_uppercase().contains("0000187C:00000550") {
                 let dev = format!("/dev/{}", entry.file_name().to_string_lossy());
                 let file = OpenOptions::new().read(true).write(true).open(&dev)?;
+                // serialize g15 instances: a concurrent command's ack landing
+                // between another's send and read fakes the wedge signature
+                if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } < 0 {
+                    return Err(io::Error::last_os_error());
+                }
                 return Ok(Led { file });
             }
         }
