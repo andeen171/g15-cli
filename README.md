@@ -60,7 +60,11 @@ Then remove/disable anything else that touches `*::kbd_backlight` via
 
 - in `~/.config/hypr/hypridle.conf`: delete the listener that runs
   `brightnessctl -sd '*::kbd_backlight' set 0` on idle
-- never bind keys to `omarchy-brightness-keyboard`
+- never bind keys to `omarchy-brightness-keyboard` — and note that
+  `omarchy-system-lock` calls `omarchy-brightness-keyboard off` 3 s after
+  locking, so **every idle/manual lock wedges the controller**. Guard the top of
+  `omarchy-brightness-keyboard` to reroute to `g15` when
+  `/sys/class/leds/dell::kbd_backlight` exists
 - `/usr/lib/systemd/system-sleep/keyboard-backlight` writes it before every
   hibernate — delete it or add `[[ -e /sys/class/leds/dell::kbd_backlight ]] && exit 0`
   near the top

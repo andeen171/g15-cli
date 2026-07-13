@@ -105,14 +105,27 @@ here so it never fired, but it's now guarded with an early exit on dell hardware
 with the systemd unit still masked, hypridle listener still disabled, LED trigger
 `[none]`, and zero kbd_backlight/brightnessctl journal entries. New activity that
 day: WMAX power-mode toggling (`0x15` mode set + `0x25` G-mode flag, ~6 switches
-balanced<->gmode) and physical Fn+F9 (KEY_PERFORMANCE) presses. The WMAX G-mode
-path (ACPI → EC) is the prime suspect for this instance; unconfirmed — controlled
-test after EC reset: verify healthy acks → toggle gmode once → re-check acks →
-toggle back → re-check. Sleep/hibernate ruled out for this instance (journal shows
-zero suspend/hibernate cycles since 2026-07-09). A wedge watchdog now probes the
-controller every 2 min (`~/.local/bin/g15-wedge-watch`, systemd user timer): logs
-transitions to `~/.local/state/g15-wedge-watch.log` and snapshots the journal +
-g15 state on OK→WEDGED, to timestamp the next wedge precisely.
+balanced<->gmode) and physical Fn+F9 (KEY_PERFORMANCE) presses. Sleep/hibernate
+ruled out for this instance (journal shows zero suspend/hibernate cycles since
+2026-07-09). A wedge watchdog now probes the controller every 2 min
+(`~/.local/bin/g15-wedge-watch`, systemd user timer): logs transitions to
+`~/.local/state/g15-wedge-watch.log` and snapshots the journal + g15 state on
+OK→WEDGED, to timestamp the next wedge precisely.
+
+**2026-07-13 — TRIGGER CAUGHT: the idle-lock path.** The watchdog nailed it on
+its first day. Timeline: probe OK 17:48:35 → hypridle idle chain fires
+(`omarchy-launch-screensaver` 150 s, `omarchy-system-lock` 152 s) at 17:50:00 →
+`omarchy-system-lock` runs `omarchy-brightness-keyboard off` 3 s after hyprlock
+starts, i.e. `brightnessctl -sd dell::kbd_backlight set 0` — and the kernel logs
+a `dell-privacy` WMI event at exactly 17:50:03 (the SMBIOS call) → probe WEDGED
+17:50:35. This 5th writer hides inside the lock script, so every idle-lock (or
+manual lock) wedged the controller — which also explains the 2026-07-10 wedge
+(machine idle-locked while unattended) and likely exonerates the WMAX G-mode
+path. A Hyprland/compositor crash 2 min later (17:52:47, after an NVIDIA "HDMI
+FRL link training failed") was unrelated to the wedge. Fix: guard at the top of
+`~/.local/share/omarchy/bin/omarchy-brightness-keyboard` reroutes off/restore/
+cycle to `g15` (USB path) when dell::kbd_backlight exists — note omarchy updates
+may overwrite it; the watchdog will catch a regression.
 
 Working reference: `led-test.py` (`python3 led-test.py RR GG BB [dim]`, no root
 needed with the uaccess udev rule / existing ACL on /dev/hidraw0).
