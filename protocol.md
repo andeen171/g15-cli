@@ -107,10 +107,15 @@ with the systemd unit still masked, hypridle listener still disabled, LED trigge
 day: WMAX power-mode toggling (`0x15` mode set + `0x25` G-mode flag, ~6 switches
 balanced<->gmode) and physical Fn+F9 (KEY_PERFORMANCE) presses. Sleep/hibernate
 ruled out for this instance (journal shows zero suspend/hibernate cycles since
-2026-07-09). A wedge watchdog now probes the controller every 2 min
-(`~/.local/bin/g15-wedge-watch`, systemd user timer): logs transitions to
-`~/.local/state/g15-wedge-watch.log` and snapshots the journal + g15 state on
-OK→WEDGED, to timestamp the next wedge precisely.
+2026-07-09). A wedge watchdog (`~/.local/bin/g15-wedge-watch`, systemd user
+timer, every 2 min) logs transitions to `~/.local/state/g15-wedge-watch.log`
+and snapshots the journal + g15 state on OK→WEDGED. It did its job — it caught
+the trigger below — but was then **disabled 2026-07-14 for false-positive
+alerts** (transient ack mismatches that flip back OK on the next probe; a real
+wedge never does). Re-arm it when hunting a new wedge trigger:
+`systemctl --user enable --now g15-wedge-watch.timer`, or one-shot probe with
+`~/.local/bin/g15-wedge-watch` and read the log. Treat only a *persistent*
+WEDGED (multiple probes, no OK flip) as real.
 
 **2026-07-13 — TRIGGER CAUGHT: the idle-lock path.** The watchdog nailed it on
 its first day. Timeline: probe OK 17:48:35 → hypridle idle chain fires
