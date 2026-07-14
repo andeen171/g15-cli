@@ -1,6 +1,6 @@
 # Maintainer: andeen171 <zeanderpreys@gmail.com>
 pkgname=g15-cli
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Keyboard backlight, fan and power control for Dell G15 laptops (AW-ELC 187c:0550)"
 arch=('x86_64')
@@ -14,7 +14,7 @@ optdepends=(
   'hyprpicker: pick colors from the screen in the TUI'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('83326293a3cdd109d32704a8369b1229449c35bfc7eb272c23cd5dbe62cfe2d7')
+sha256sums=('ee96196a5bfd6252ab3bfeddaf0c490878b2a757121f4d41ae7a7d62607a1652')
 
 prepare() {
   cd "$pkgname-$pkgver"
