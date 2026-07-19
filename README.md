@@ -76,6 +76,9 @@ If the backlight stops responding and survives reboots: shut down, unplug AC,
 disconnect the battery (or hold the power button 30 s with both removed), boot.
 The `g15` CLI detects the wedged state and tells you.
 
+The full Omarchy setup — including Fn-key/G-Mode key bindings and an hwdb
+remap for the internal keyboard — is documented in [omarchy.md](omarchy.md).
+
 ## Usage
 
 ```
