@@ -6,28 +6,44 @@ coexist with `g15`. Two themes: (1) omarchy's defaults write
 (see [protocol.md](protocol.md)); (2) the G15's Fn keys emit keycodes omarchy
 doesn't expect. Use this as the restore checklist after a reinstall.
 
+Written against **Omarchy 4** (`omarchy-dev 4.0.0`), which moved the bar,
+idle, and lock into one Quickshell process (`omarchy-shell`), replaced waybar
+and hypridle, made `/usr/share/omarchy` package-owned (`~/.local/share/omarchy`
+is now just a symlink to it), and dropped `~/.config/uwsm/env`.
+
 ## 1. SMBIOS writers neutralized (the wedge — critical)
 
 Every path that writes `/sys/class/leds/dell::kbd_backlight` must stay dead:
 
 | Writer | Fix |
 |---|---|
-| `omarchy-system-lock` → `omarchy-brightness-keyboard off` on every screen lock (**the confirmed wedge trigger**) | Shim at `~/.local/bin/omarchy-brightness-keyboard` reroutes off/restore/cycle to `g15` |
-| Omarchy keybinds calling `omarchy-brightness-keyboard` | Same shim (all callers use the bare name) |
+| `omarchy-brightness-keyboard off` on every screen lock (**the confirmed wedge trigger**) — in Omarchy 3 from `omarchy-system-lock`, in Omarchy 4 from the shell's lock plugin, 5 s after the lock screen goes idle (`/usr/share/omarchy/shell/plugins/lock/Service.qml`, `blankProcess`) | Shim at `~/.local/bin/omarchy-brightness-keyboard` reroutes off/restore/cycle to `g15` — **but see the PATH gap below: the shim does not cover the Omarchy 4 lock path** |
+| Omarchy keybinds calling `omarchy-brightness-keyboard` | Rebound to `g15` by absolute path in `bindings.lua` (§3), so PATH order is irrelevant |
 | `systemd-backlight` restore at boot | `systemctl mask 'systemd-backlight@leds:dell::kbd_backlight.service'` |
-| hypridle idle listener | kbd_backlight block commented out in `~/.config/hypr/hypridle.conf` |
+| hypridle idle listener | Moot on Omarchy 4 (hypridle is gone; idle is a shell service). The kbd_backlight block stays commented out in `~/.config/hypr/hypridle.conf` for a downgrade/reinstall |
 | `/usr/lib/systemd/system-sleep/keyboard-backlight` (omarchy's ASUS hibernate fix) | Guarded with an early exit when `dell::kbd_backlight` exists |
 
-The shim wins over omarchy's copy because `~/.config/uwsm/env` (user config,
-survives omarchy updates) ends with:
+**PATH gap (Omarchy 4, open).** The shim only wins for callers that resolve the
+bare name with `~/.local/bin` first. `omarchy-shell` is launched with
+`PATH=/usr/share/omarchy/bin:...`, so *its* children — including the lock
+blank — get the packaged binary and write SMBIOS:
 
-```bash
-export PATH=$HOME/.local/bin:$PATH
+```sh
+# what the shell would actually run
+tr '\0' '\n' < /proc/$(pgrep -f quickshell | head -1)/environ | sed -n 's/^PATH=//p'
 ```
 
-The omarchy repo (`~/.local/share/omarchy`) is kept pristine so
-`omarchy-update` pulls cleanly. Do **not** blacklist `dell_laptop` to remove
-the LED node — it also provides the battery charge thresholds (50–90%) in use.
+Not yet observed firing (no `brightnessctl` save state under
+`$XDG_RUNTIME_DIR/brightnessctl` or `/var/lib/brightnessctl` after a day of
+uptime, and `g15 info` still reads firmware 1.1.12), so it is a live hazard
+rather than a known break. `~/.config/uwsm/env` no longer exists to reorder
+PATH; the supported fix is `omarchy plugin clone omarchy.lock` and dropping
+`omarchy-brightness-keyboard off` from `blankProcess` in the clone.
+
+`/usr/share/omarchy` is package-owned — never edit it (it is also what
+`~/.local/share/omarchy` now points at). Do **not** blacklist `dell_laptop` to
+remove the LED node — it also provides the battery charge thresholds (50–90%)
+in use.
 
 ## 2. Internal keyboard keycodes (`/etc/udev/hwdb.d/61-g15-keyboard.hwdb`)
 
@@ -66,10 +82,19 @@ Apply with `sudo systemd-hwdb update && sudo udevadm trigger
 
 - `~/.config/hypr/autostart.lua`: `g15 restore` reapplies the saved LED
   state at session start (over USB — never sysfs).
-- Waybar (`~/.config/waybar/config.jsonc`): `custom/g15` module runs
-  `g15 waybar` (reads hwmon + state file only, never opens the USB device);
-  click launches the TUI via `omarchy-launch-or-focus-tui g15-tui`.
+- Bar widget: Omarchy 4 replaced waybar with the Quickshell `omarchy-shell`, so
+  the module is now the `andeen171.g15` **plugin** from `omarchy-plugin/` in
+  this repo, copied to `~/.config/omarchy/plugins/andeen171.g15` and enabled in
+  the bar's left section (see README → Bar module). It runs `g15 waybar` (reads
+  hwmon + state file only, never opens the USB device) every 5 s; click
+  launches the TUI via `omarchy-launch-or-focus-tui g15-tui`.
+  Before the plugin this was an inline `{"id":"g15","type":"command",...}` entry
+  in `~/.config/omarchy/shell.json`; that still works as a fallback.
+- `~/.local/bin/g15-tui`: wrapper the click target runs (`exec sudo g15 tui`).
 - `~/.config/hypr/apps.lua`: window rule floats `org.omarchy.g15-tui`.
+
+Reinstall note: plugins live in `~/.config`, so the AUR package cannot ship the
+widget — the copy step above is part of the restore checklist.
 
 ## 5. Wedge watchdog (dormant)
 

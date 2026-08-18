@@ -58,16 +58,16 @@ sudo systemctl mask 'systemd-backlight@leds:dell::kbd_backlight.service'
 Then remove/disable anything else that touches `*::kbd_backlight` via
 `brightnessctl` or sysfs. On Omarchy that means:
 
-- in `~/.config/hypr/hypridle.conf`: delete the listener that runs
-  `brightnessctl -sd '*::kbd_backlight' set 0` on idle
-- never bind keys to `omarchy-brightness-keyboard` — and note that
-  `omarchy-system-lock` calls `omarchy-brightness-keyboard off` 3 s after
-  locking, so **every idle/manual lock wedges the controller**. Shadow it with
-  an update-proof shim: put a `omarchy-brightness-keyboard` script in
-  `~/.local/bin` that maps `off`→`g15 led off`, `restore`→`g15 restore`, and
-  everything else→`g15 led brightness cycle`, then make `~/.local/bin` precede
-  omarchy's bin dir by appending `export PATH=$HOME/.local/bin:$PATH` to
-  `~/.config/uwsm/env` (user config — survives omarchy updates)
+- in `~/.config/hypr/hypridle.conf` (Omarchy 3 and older): delete the listener
+  that runs `brightnessctl -sd '*::kbd_backlight' set 0` on idle
+- never bind keys to `omarchy-brightness-keyboard` — bind `g15` by absolute
+  path instead. The lock screen calls `omarchy-brightness-keyboard off` a few
+  seconds after locking, so **every idle/manual lock can wedge the
+  controller**: on Omarchy 3 from `omarchy-system-lock`, on Omarchy 4 from the
+  shell's lock plugin. A `~/.local/bin/omarchy-brightness-keyboard` shim
+  (`off`→`g15 led off`, `restore`→`g15 restore`, else→`g15 led brightness
+  cycle`) covers PATH callers, but **not** the Omarchy 4 lock path — the shell
+  runs with `/usr/share/omarchy/bin` first. See [omarchy.md](omarchy.md)
 - `/usr/lib/systemd/system-sleep/keyboard-backlight` writes it before every
   hibernate — delete it or add `[[ -e /sys/class/leds/dell::kbd_backlight ]] && exit 0`
   near the top
@@ -142,7 +142,42 @@ echo "$USER ALL=(root) NOPASSWD: /usr/bin/g15 power toggle" | \
 Hyprland: `exec-once = g15 restore` (Omarchy lua config:
 `o.launch_on_start("g15 restore")` in `~/.config/hypr/autostart.lua`).
 
-### Waybar module
+### Bar module
+
+`g15 waybar` prints one line of waybar-style JSON — CPU/GPU temps as the label,
+fans + power mode in the tooltip. It reads hwmon and the state file only, never
+the USB device, so polling it can never wedge the controller.
+
+**Omarchy 4 (Quickshell shell) — ship it as a plugin.** `omarchy-plugin/` in
+this repo is a bar-widget plugin (`andeen171.g15`). Install it by copy (the
+shell only loads plugins from `~/.config/omarchy/plugins/`, and refuses
+symlinks):
+
+```sh
+cp -r omarchy-plugin ~/.config/omarchy/plugins/andeen171.g15
+omarchy plugin validate ~/.config/omarchy/plugins/andeen171.g15
+omarchy-shell shell rescanPlugins
+omarchy plugin enable andeen171.g15 left
+```
+
+Settings (`interval` seconds, `onClick` command) are editable in Setup >
+Plugins or inline in the widget's `~/.config/omarchy/shell.json` entry. Without
+the plugin, the same thing as a custom command module in `shell.json`:
+
+```json
+{ "id": "g15", "type": "command", "exec": "g15 waybar", "interval": 5,
+  "onClick": "omarchy-launch-or-focus-tui g15-tui" }
+```
+
+Both click through `omarchy-launch-or-focus-tui g15-tui`, which needs a `g15-tui`
+wrapper script on PATH (`exec sudo g15 tui`) and a float rule in
+`~/.config/hypr/apps.lua`:
+
+```lua
+o.window("org.omarchy.g15-tui", { tag = "+floating-window" })
+```
+
+**Waybar** (or Omarchy 3 and older):
 
 ```jsonc
 "custom/g15": {
@@ -151,15 +186,6 @@ Hyprland: `exec-once = g15 restore` (Omarchy lua config:
   "interval": 5,
   "on-click": "alacritty --class=g15-tui -e sudo g15 tui"
 }
-```
-
-Shows CPU/GPU temps in the bar, fans + power mode on hover. On Omarchy, use
-`"on-click": "omarchy-launch-or-focus-tui g15-tui"` with a `g15-tui` wrapper
-script on PATH (`exec sudo g15 tui`) to get the standard floating TUI window,
-and float it in `~/.config/hypr/apps.lua`:
-
-```lua
-o.window("org.omarchy.g15-tui", { tag = "+floating-window" })
 ```
 
 ### Example profile binds
