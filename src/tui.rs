@@ -16,9 +16,7 @@ use std::time::Duration;
 
 type Rgb = (u8, u8, u8);
 
-const EFFECTS: [&str; 5] = ["static", "pulse", "morph", "cycle", "rainbow"];
-/// (min, max) colors per effect
-const COLOR_LIMITS: [(usize, usize); 5] = [(1, 1), (1, 1), (2, 2), (2, 8), (2, 8)];
+use led::{COLOR_LIMITS, EFFECTS};
 
 const PRESETS: [(&str, Rgb); 9] = [
     ("white", (0xFF, 0xFF, 0xFF)),

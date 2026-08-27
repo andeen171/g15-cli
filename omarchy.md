@@ -88,8 +88,12 @@ Apply with `sudo systemd-hwdb update && sudo udevadm trigger
   `~/.config/omarchy/plugins/io.github.andeen171.g15` and enabled in the bar's
   left section (see README → Bar module). It polls `g15 status` (hwmon + state
   file only, never the USB device) every 5 s; left click opens a panel with
-  temperature meters, power-mode chips and the keyboard-light controls, right
-  click launches the TUI via `omarchy-launch-or-focus-tui g15-tui`.
+  temperature meters, power-mode chips and the full backlight controls
+  (brightness, effect, speed, color list, HSV picker), right click launches the
+  TUI — which still owns fan boost — via `omarchy-launch-or-focus-tui g15-tui`.
+  Editing the plugin's QML needs `omarchy restart shell`; the shell does not
+  hot-reload a loaded plugin component, and neither `rescanPlugins` nor a
+  disable/enable cycle rebuilds it.
   The power chips shell out through `sudo -n g15 power <mode>` and stay inert
   until `/etc/sudoers.d/` grants `/usr/bin/g15 power *` — the existing
   `g15-power-toggle` entry only covers `power toggle` (the Fn+F9 bind).

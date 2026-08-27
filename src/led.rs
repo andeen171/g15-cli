@@ -14,6 +14,21 @@ const DIM_ZONE_COUNT: u8 = 0x14; // dimming addresses zones 0x00..0x13
 /// (effect, duration, tempo, r, g, b)
 type Action = (u8, u16, u16, u8, u8, u8);
 
+/// The effects `g15 led`, the TUI, and the bar plugin all name, and how many
+/// colors each one takes: (min, max). The firmware fixes these — morph blends
+/// exactly two, cycle and rainbow walk a list of up to 8.
+pub const EFFECTS: [&str; 5] = ["static", "pulse", "morph", "cycle", "rainbow"];
+pub const COLOR_LIMITS: [(usize, usize); 5] = [(1, 1), (1, 1), (2, 2), (2, 8), (2, 8)];
+
+/// (min, max) colors for `effect`, defaulting to static's for an unknown name.
+pub fn color_limits(effect: &str) -> (usize, usize) {
+    EFFECTS
+        .iter()
+        .position(|e| *e == effect)
+        .map(|i| COLOR_LIMITS[i])
+        .unwrap_or((1, 1))
+}
+
 /// The 7 colors AWCC's spectrum/wave effects use, straight from the capture.
 pub const SPECTRUM: [(u8, u8, u8); 7] = [
     (0xFF, 0x00, 0x00),

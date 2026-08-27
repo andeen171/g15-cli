@@ -89,6 +89,8 @@ g15 led cycle [speed]               morph through the color spectrum
 g15 led rainbow [speed]             moving rainbow across the 4 zones
 g15 led brightness <0-100|cycle>    brightness; cycle = off -> 50% -> 100%
 g15 led effect <name>               re-apply an effect with its saved colors
+g15 led colors RRGGBB[,RRGGBB...]   set the current effect's color list
+g15 led speed <1-10>                set the current effect's speed
 g15 led off | on
 
 sudo g15 power                      show power mode
@@ -148,9 +150,10 @@ Hyprland: `exec-once = g15 restore` (Omarchy lua config:
 
 **Omarchy 4 (Quickshell shell) — the plugin.** `omarchy-plugin/` in this repo is
 a bar-widget plugin (`io.github.andeen171.g15`): CPU/GPU temps in the bar, and a
-panel with temperature meters, power-mode chips, the keyboard brightness slider
-and the effect chips. Right click (or the panel's *Open TUI* button) opens the
-TUI for the things the panel does not cover — per-zone colors, fan boost.
+panel with temperature meters, power-mode chips, and the whole backlight —
+brightness, effect, speed, and the effect's color list with an HSV picker
+(presets, hex field, hyprpicker eyedropper). Right click, or the panel's *Open
+TUI* button, opens the TUI, which still owns fan boost.
 
 Install by copy (the shell only loads plugins from `~/.config/omarchy/plugins/`,
 and refuses symlinks):
@@ -164,9 +167,13 @@ omarchy plugin enable io.github.andeen171.g15 left
 
 Settings (refresh interval, temps-or-glyph in the bar, the power and TUI
 commands) are editable in Setup > Plugins, or inline in the widget's
-`~/.config/omarchy/shell.json` entry. See
-[omarchy-plugin/README.md](omarchy-plugin/README.md) for the sudoers line the
-power chips need — without it they are inert, everything else still works.
+`~/.config/omarchy/shell.json` entry.
+
+It installs by copy rather than `omarchy plugin add`, because that command
+wants the repo root to be the plugin and this one is a subdirectory — see
+[omarchy-plugin/README.md](omarchy-plugin/README.md) for why it stays here for
+now, how to split it out later, and the sudoers line the power chips need
+(without it they are inert; everything else still works).
 
 Every read is `g15 status` (hwmon + state file only, never the USB device), so
 polling can never wedge the controller. Writes go through the CLI, which owns
