@@ -83,13 +83,19 @@ Apply with `sudo systemd-hwdb update && sudo udevadm trigger
 - `~/.config/hypr/autostart.lua`: `g15 restore` reapplies the saved LED
   state at session start (over USB — never sysfs).
 - Bar widget: Omarchy 4 replaced waybar with the Quickshell `omarchy-shell`, so
-  the module is now the `andeen171.g15` **plugin** from `omarchy-plugin/` in
-  this repo, copied to `~/.config/omarchy/plugins/andeen171.g15` and enabled in
-  the bar's left section (see README → Bar module). It runs `g15 waybar` (reads
-  hwmon + state file only, never opens the USB device) every 5 s; click
-  launches the TUI via `omarchy-launch-or-focus-tui g15-tui`.
-  Before the plugin this was an inline `{"id":"g15","type":"command",...}` entry
-  in `~/.config/omarchy/shell.json`; that still works as a fallback.
+  the module is now the `io.github.andeen171.g15` **plugin** from
+  `omarchy-plugin/` in this repo, copied to
+  `~/.config/omarchy/plugins/io.github.andeen171.g15` and enabled in the bar's
+  left section (see README → Bar module). It polls `g15 status` (hwmon + state
+  file only, never the USB device) every 5 s; left click opens a panel with
+  temperature meters, power-mode chips and the keyboard-light controls, right
+  click launches the TUI via `omarchy-launch-or-focus-tui g15-tui`.
+  The power chips shell out through `sudo -n g15 power <mode>` and stay inert
+  until `/etc/sudoers.d/` grants `/usr/bin/g15 power *` — the existing
+  `g15-power-toggle` entry only covers `power toggle` (the Fn+F9 bind).
+  Predecessors, both still working as fallbacks: the `andeen171.g15` plugin
+  (text label + click-to-TUI, superseded 2026-08-26) and an inline
+  `{"id":"g15","type":"command",...}` entry in `~/.config/omarchy/shell.json`.
 - `~/.local/bin/g15-tui`: wrapper the click target runs (`exec sudo g15 tui`).
 - `~/.config/hypr/apps.lua`: window rule floats `org.omarchy.g15-tui`.
 

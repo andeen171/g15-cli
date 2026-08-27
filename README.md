@@ -88,6 +88,7 @@ g15 led morph RRGGBB RRGGBB [speed] morph between two colors
 g15 led cycle [speed]               morph through the color spectrum
 g15 led rainbow [speed]             moving rainbow across the 4 zones
 g15 led brightness <0-100|cycle>    brightness; cycle = off -> 50% -> 100%
+g15 led effect <name>               re-apply an effect with its saved colors
 g15 led off | on
 
 sudo g15 power                      show power mode
@@ -98,6 +99,7 @@ sudo g15 info                       model, firmware, temps, fan rpm
 
 g15 tui                             interactive panel (root for fan/power tab)
 g15 waybar                          JSON for a waybar custom module
+g15 status                          JSON for the omarchy bar plugin
 g15 restore                         re-apply saved LED state (run at login)
 ```
 
@@ -144,34 +146,42 @@ Hyprland: `exec-once = g15 restore` (Omarchy lua config:
 
 ### Bar module
 
-`g15 waybar` prints one line of waybar-style JSON — CPU/GPU temps as the label,
-fans + power mode in the tooltip. It reads hwmon and the state file only, never
-the USB device, so polling it can never wedge the controller.
+**Omarchy 4 (Quickshell shell) — the plugin.** `omarchy-plugin/` in this repo is
+a bar-widget plugin (`io.github.andeen171.g15`): CPU/GPU temps in the bar, and a
+panel with temperature meters, power-mode chips, the keyboard brightness slider
+and the effect chips. Right click (or the panel's *Open TUI* button) opens the
+TUI for the things the panel does not cover — per-zone colors, fan boost.
 
-**Omarchy 4 (Quickshell shell) — ship it as a plugin.** `omarchy-plugin/` in
-this repo is a bar-widget plugin (`andeen171.g15`). Install it by copy (the
-shell only loads plugins from `~/.config/omarchy/plugins/`, and refuses
-symlinks):
+Install by copy (the shell only loads plugins from `~/.config/omarchy/plugins/`,
+and refuses symlinks):
 
 ```sh
-cp -r omarchy-plugin ~/.config/omarchy/plugins/andeen171.g15
-omarchy plugin validate ~/.config/omarchy/plugins/andeen171.g15
+cp -r omarchy-plugin ~/.config/omarchy/plugins/io.github.andeen171.g15
+omarchy plugin validate ~/.config/omarchy/plugins/io.github.andeen171.g15
 omarchy-shell shell rescanPlugins
-omarchy plugin enable andeen171.g15 left
+omarchy plugin enable io.github.andeen171.g15 left
 ```
 
-Settings (`interval` seconds, `onClick` command) are editable in Setup >
-Plugins or inline in the widget's `~/.config/omarchy/shell.json` entry. Without
-the plugin, the same thing as a custom command module in `shell.json`:
+Settings (refresh interval, temps-or-glyph in the bar, the power and TUI
+commands) are editable in Setup > Plugins, or inline in the widget's
+`~/.config/omarchy/shell.json` entry. See
+[omarchy-plugin/README.md](omarchy-plugin/README.md) for the sudoers line the
+power chips need — without it they are inert, everything else still works.
+
+Every read is `g15 status` (hwmon + state file only, never the USB device), so
+polling can never wedge the controller. Writes go through the CLI, which owns
+the USB protocol.
+
+**Plain command module** (no plugin, or Omarchy 3): `g15 waybar` prints
+waybar-style JSON — temps as the label, fans + power mode in the tooltip.
 
 ```json
 { "id": "g15", "type": "command", "exec": "g15 waybar", "interval": 5,
   "onClick": "omarchy-launch-or-focus-tui g15-tui" }
 ```
 
-Both click through `omarchy-launch-or-focus-tui g15-tui`, which needs a `g15-tui`
-wrapper script on PATH (`exec sudo g15 tui`) and a float rule in
-`~/.config/hypr/apps.lua`:
+`omarchy-launch-or-focus-tui g15-tui` needs a `g15-tui` wrapper script on PATH
+(`exec sudo g15 tui`) and a float rule in `~/.config/hypr/apps.lua`:
 
 ```lua
 o.window("org.omarchy.g15-tui", { tag = "+floating-window" })
