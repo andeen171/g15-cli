@@ -302,11 +302,19 @@ fn run() -> Result<(), String> {
             // Structured sibling of `waybar`, for the omarchy bar plugin's panel.
             // Same guarantee: hwmon + state file only, never the USB device.
             let saved = state::load();
-            let power = saved
+            let recorded = saved
                 .get("power")
                 .filter(|p| wmax::POWER_MODES.iter().any(|(n, _)| n == p))
                 .map(String::as_str)
                 .unwrap_or("unknown");
+            // The driver's own profile is the truth for the modes it can
+            // express, and stays right when something other than g15 changes
+            // it. G-Mode is set through WMAX behind the driver's back, so that
+            // one still comes from the state file.
+            let power = match hwmon::platform_profile().as_deref().and_then(hwmon::mode_for_profile) {
+                Some(p) if recorded != "gmode" => p,
+                _ => recorded,
+            };
             let effect = saved.get("effect").map(String::as_str).unwrap_or("static");
             let brightness: u8 = saved
                 .get("brightness")

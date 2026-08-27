@@ -43,3 +43,30 @@ pub fn read() -> io::Result<Stats> {
         boost: read_u32(&dir.join("fan1_boost")),
     })
 }
+
+/// The alienware-wmi driver's platform profile, e.g. "quiet" or "performance".
+/// World-readable, unlike the WMAX power-mode read, and it also catches mode
+/// changes made outside g15 — omarchy's own power menu writes this node.
+pub fn platform_profile() -> Option<String> {
+    fs::read_dir("/sys/class/platform-profile")
+        .ok()?
+        .filter_map(|e| e.ok())
+        .find(|e| {
+            fs::read_to_string(e.path().join("name")).unwrap_or_default().trim() == "alienware-wmi"
+        })
+        .and_then(|e| fs::read_to_string(e.path().join("profile")).ok())
+        .map(|p| p.trim().to_string())
+}
+
+/// The g15 mode name for a platform profile, where one exists. The driver has
+/// profiles g15 does not name (`balanced-performance`, `custom`) and g15 has a
+/// mode the driver cannot report (G-Mode goes through WMAX behind its back).
+pub fn mode_for_profile(profile: &str) -> Option<&'static str> {
+    match profile {
+        "quiet" => Some("quiet"),
+        "balanced" => Some("balanced"),
+        "performance" | "balanced-performance" => Some("performance"),
+        "low-power" => Some("battery"),
+        _ => None,
+    }
+}

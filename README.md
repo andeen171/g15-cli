@@ -182,9 +182,9 @@ wants the repo root to be the plugin and this one is a subdirectory — see
 now, how to split it out later, and the sudoers line the power chips need
 (without it they are inert; everything else still works).
 
-Every read is `g15 status` (hwmon + state file only, never the USB device), so
-polling can never wedge the controller. Writes go through the CLI, which owns
-the USB protocol.
+Every read is `g15 status` — hwmon, the driver's platform profile, and the
+state file, never the USB device — so polling can never wedge the controller.
+Writes go through the CLI, which owns the USB protocol.
 
 **Plain command module** (no plugin, or Omarchy 3): `g15 waybar` prints
 waybar-style JSON — temps as the label, fans + power mode in the tooltip.
