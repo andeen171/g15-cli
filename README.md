@@ -150,10 +150,11 @@ Hyprland: `exec-once = g15 restore` (Omarchy lua config:
 
 **Omarchy 4 (Quickshell shell) — the plugin.** `omarchy-plugin/` in this repo is
 a bar-widget plugin (`io.github.andeen171.g15`): CPU/GPU temps in the bar, and a
-panel with temperature meters, power-mode chips, and the whole backlight —
-brightness, effect, speed, and the effect's color list with an HSV picker
-(presets, hex field, hyprpicker eyedropper). Right click, or the panel's *Open
-TUI* button, opens the TUI, which still owns fan boost.
+panel with temperature meters, power-mode chips, a fan-boost slider, and the
+whole backlight — brightness, effect, speed, and the effect's color list with
+an HSV picker (presets, hex field, hyprpicker eyedropper). Right click, or the
+panel's *Open TUI* button, opens the TUI for the same controls from the
+keyboard.
 
 Install by copy (the shell only loads plugins from `~/.config/omarchy/plugins/`,
 and refuses symlinks):

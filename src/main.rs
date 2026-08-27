@@ -270,10 +270,13 @@ fn run() -> Result<(), String> {
         Some("fan") => match (arg(1), arg(2)) {
             (Some("boost"), Some(v)) => {
                 let boost: u8 = v.parse().map_err(|_| "boost must be 0-100")?;
+                let boost = boost.min(100);
                 for fan in 0..2 {
-                    wmax::set_fan_boost(fan, boost.min(100)).map_err(|e| e.to_string())?;
+                    wmax::set_fan_boost(fan, boost).map_err(|e| e.to_string())?;
                 }
-                Ok(())
+                // Reading it back needs root, so record it for `status` the way
+                // the TUI does.
+                state::set("boost", &boost.to_string()).map_err(|e| e.to_string())
             }
             (None, _) => {
                 for fan in 0..2 {
