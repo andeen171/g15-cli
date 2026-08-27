@@ -270,13 +270,10 @@ fn run() -> Result<(), String> {
         Some("fan") => match (arg(1), arg(2)) {
             (Some("boost"), Some(v)) => {
                 let boost: u8 = v.parse().map_err(|_| "boost must be 0-100")?;
-                let boost = boost.min(100);
                 for fan in 0..2 {
-                    wmax::set_fan_boost(fan, boost).map_err(|e| e.to_string())?;
+                    wmax::set_fan_boost(fan, boost.min(100)).map_err(|e| e.to_string())?;
                 }
-                // Reading it back needs root, so record it for `status` the way
-                // the TUI does.
-                state::set("boost", &boost.to_string()).map_err(|e| e.to_string())
+                Ok(())
             }
             (None, _) => {
                 for fan in 0..2 {
@@ -315,8 +312,6 @@ fn run() -> Result<(), String> {
                 .get("brightness")
                 .and_then(|b| b.parse().ok())
                 .unwrap_or(100);
-            // Reading the real boost needs root (WMAX); report what was last set.
-            let boost: u8 = saved.get("boost").and_then(|b| b.parse().ok()).unwrap_or(0);
             let speed: u8 = parse_speed(saved.get("speed").map(String::as_str)).unwrap_or(5);
             let (min, max) = led::color_limits(effect);
             let colors: Vec<String> = saved
@@ -338,7 +333,8 @@ fn run() -> Result<(), String> {
                 .join(",");
             let s = hwmon::read().ok();
             let ok = s.is_some();
-            let s = s.unwrap_or(hwmon::Stats { cpu: 0, gpu: 0, fan1: 0, fan2: 0 });
+            let s = s.unwrap_or(hwmon::Stats { cpu: 0, gpu: 0, fan1: 0, fan2: 0, boost: 0 });
+            let boost = s.boost.min(100);
             println!(
                 "{{\"sensors\":{ok},\"cpu\":{},\"gpu\":{},\"fan1\":{},\"fan2\":{},\
 \"power\":\"{power}\",\"boost\":{boost},\"effect\":\"{effect}\",\"brightness\":{brightness},\

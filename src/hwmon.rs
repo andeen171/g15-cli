@@ -4,10 +4,11 @@ use std::fs;
 use std::io;
 
 pub struct Stats {
-    pub cpu: u32,  // °C
-    pub gpu: u32,  // °C
-    pub fan1: u32, // rpm
-    pub fan2: u32, // rpm
+    pub cpu: u32,   // °C
+    pub gpu: u32,   // °C
+    pub fan1: u32,  // rpm
+    pub fan2: u32,  // rpm
+    pub boost: u32, // % — alienware_wmi only, 0 on the dell_smm fallback
 }
 
 fn find() -> io::Result<std::path::PathBuf> {
@@ -37,5 +38,8 @@ pub fn read() -> io::Result<Stats> {
         gpu: read_u32(&dir.join("temp2_input")) / 1000,
         fan1: read_u32(&dir.join("fan1_input")),
         fan2: read_u32(&dir.join("fan2_input")),
+        // The same value `g15 fan boost` writes through WMAX, readable without
+        // root — no need to guess from what was last set.
+        boost: read_u32(&dir.join("fan1_boost")),
     })
 }

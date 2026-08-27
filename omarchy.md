@@ -94,10 +94,13 @@ Apply with `sudo systemd-hwdb update && sudo udevadm trigger
   Editing the plugin's QML needs `omarchy restart shell`; the shell does not
   hot-reload a loaded plugin component, and neither `rescanPlugins` nor a
   disable/enable cycle rebuilds it.
-  The power chips and the boost slider shell out through `sudo -n g15 …` and
-  stay inert without `/etc/sudoers.d/` entries for `/usr/bin/g15 power *` and
-  `/usr/bin/g15 fan boost *` — the original `g15-power-toggle` entry only
-  covered `power toggle` (the Fn+F9 bind).
+  The power chips and the boost slider shell out through
+  `pkexec /usr/bin/g15 …`, which the shell's own polkit agent
+  (`omarchy.polkit`) answers with a password dialog — so they need no sudoers
+  entry at all. `/usr/share/polkit-1/actions/org.andeen171.g15.policy` (shipped
+  by the package) makes that prompt name the operation and cache for a few
+  minutes. The `/etc/sudoers.d/` entries for `g15 power *` remain for the Fn+F9
+  bind, which has no session to prompt in.
   Predecessors, both still working as fallbacks: the `andeen171.g15` plugin
   (text label + click-to-TUI, superseded 2026-08-26) and an inline
   `{"id":"g15","type":"command",...}` entry in `~/.config/omarchy/shell.json`.

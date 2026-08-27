@@ -32,6 +32,9 @@ yay -S g15-cli
 cargo install --path .
 sudo install -Dm644 99-g15-led.rules /etc/udev/rules.d/99-g15-led.rules
 sudo udevadm control --reload && sudo udevadm trigger
+# optional: lets `pkexec g15 power|fan` ask for a password through polkit
+sudo install -Dm644 org.andeen171.g15.policy \
+  /usr/share/polkit-1/actions/org.andeen171.g15.policy
 ```
 
 ### Fan/power support (optional, needs root)
@@ -152,9 +155,12 @@ Hyprland: `exec-once = g15 restore` (Omarchy lua config:
 a bar-widget plugin (`io.github.andeen171.g15`): CPU/GPU temps in the bar, and a
 panel with temperature meters, power-mode chips, a fan-boost slider, and the
 whole backlight — brightness, effect, speed, and the effect's color list with
-an HSV picker (presets, hex field, hyprpicker eyedropper). Right click, or the
-panel's *Open TUI* button, opens the TUI for the same controls from the
-keyboard.
+an HSV picker (presets, hex field, hyprpicker eyedropper). Right click opens
+the TUI for the same controls from the keyboard.
+
+The two privileged controls (power mode, fan boost) run through `pkexec`, so
+the shell's polkit dialog asks for a password instead of needing a sudoers
+whitelist.
 
 Install by copy (the shell only loads plugins from `~/.config/omarchy/plugins/`,
 and refuses symlinks):
