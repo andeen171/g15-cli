@@ -14,8 +14,17 @@ version after that; the one-time setup is done.
 
 ## Future releases
 
+The AUR clone lives at `~/dev/aur-g15-cli` — a permanent checkout, not a `/tmp`
+one, because a throwaway clone is how a release ends up built, committed and
+never actually pushed. It fetches over HTTPS and pushes over SSH:
+
+```
+origin  https://aur.archlinux.org/g15-cli.git      (fetch)
+origin  ssh://aur@aur.archlinux.org/g15-cli.git    (push)
+```
+
 ```sh
-# in the repo
+# in this repo
 vim Cargo.toml                      # bump version = "X.Y.Z"
 cargo build                         # refreshes Cargo.lock
 git commit -am "vX.Y.Z" && git tag vX.Y.Z && git push && git push origin vX.Y.Z
@@ -29,9 +38,16 @@ makepkg -f                          # must build clean
 makepkg --printsrcinfo > .SRCINFO
 rm -rf src pkg *.tar.* && git commit -am "aur: X.Y.Z" && git push
 
-# push to the AUR remote
-cp PKGBUILD .SRCINFO /tmp/aur-g15/
-cd /tmp/aur-g15 && git commit -am "g15-cli X.Y.Z" && git push
+# publish to the AUR
+cp PKGBUILD .SRCINFO ~/dev/aur-g15-cli/
+cd ~/dev/aur-g15-cli && git commit -am "g15-cli X.Y.Z" && git push
+```
+
+The push authenticates with `~/.ssh/id_ed25519`, which has a passphrase, so it
+needs an unlocked agent:
+
+```sh
+eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
 ```
 
 ## Notes
