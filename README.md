@@ -179,8 +179,8 @@ commands) are editable in Setup > Plugins, or inline in the widget's
 It installs by copy rather than `omarchy plugin add`, because that command
 wants the repo root to be the plugin and this one is a subdirectory — see
 [omarchy-plugin/README.md](omarchy-plugin/README.md) for why it stays here for
-now, how to split it out later, and the sudoers line the power chips need
-(without it they are inert; everything else still works).
+now, how to split it out later, and the polkit policy that lets the power and
+fan controls ask for your password instead of running unauthenticated.
 
 Every read is `g15 status` — hwmon, the driver's platform profile, and the
 state file, never the USB device — so polling can never wedge the controller.

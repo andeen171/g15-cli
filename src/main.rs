@@ -288,7 +288,10 @@ fn run() -> Result<(), String> {
         Some("tui") => tui::run().map_err(|e| e.to_string()),
         Some("waybar") => {
             let saved = state::load();
-            let power = saved.get("power").map(String::as_str).unwrap_or("?");
+            let power = hwmon::platform_profile()
+                .as_deref()
+                .and_then(hwmon::mode_for_profile)
+                .unwrap_or_else(|| saved.get("power").map(String::as_str).unwrap_or("?"));
             match hwmon::read() {
                 Ok(s) => println!(
                     "{{\"text\": \"󰍛 {}°  󰢮 {}°\", \"tooltip\": \"CPU {}°C — fan {} rpm\\nGPU {}°C — fan {} rpm\\npower: {}\"}}",
@@ -307,14 +310,13 @@ fn run() -> Result<(), String> {
                 .filter(|p| wmax::POWER_MODES.iter().any(|(n, _)| n == p))
                 .map(String::as_str)
                 .unwrap_or("unknown");
-            // The driver's own profile is the truth for the modes it can
-            // express, and stays right when something other than g15 changes
-            // it. G-Mode is set through WMAX behind the driver's back, so that
-            // one still comes from the state file.
-            let power = match hwmon::platform_profile().as_deref().and_then(hwmon::mode_for_profile) {
-                Some(p) if recorded != "gmode" => p,
-                _ => recorded,
-            };
+            // The driver's own profile is the truth for every mode it can name
+            // (G-Mode included), and stays right when something other than g15
+            // changes it. The state file is only the fallback.
+            let power = hwmon::platform_profile()
+                .as_deref()
+                .and_then(hwmon::mode_for_profile)
+                .unwrap_or(recorded);
             let effect = saved.get("effect").map(String::as_str).unwrap_or("static");
             let brightness: u8 = saved
                 .get("brightness")

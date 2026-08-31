@@ -58,14 +58,18 @@ pub fn platform_profile() -> Option<String> {
         .map(|p| p.trim().to_string())
 }
 
-/// The g15 mode name for a platform profile, where one exists. The driver has
-/// profiles g15 does not name (`balanced-performance`, `custom`) and g15 has a
-/// mode the driver cannot report (G-Mode goes through WMAX behind its back).
+/// The g15 mode name for a platform profile, where one exists.
+///
+/// On the G-series the driver applies `g_series_quirks`, which makes its
+/// `performance` profile G-Mode (0xAB) and shifts plain performance (0xA1)
+/// down to `balanced-performance` — so those two names read across, and
+/// G-Mode is visible without root after all. `custom` has no g15 name.
 pub fn mode_for_profile(profile: &str) -> Option<&'static str> {
     match profile {
         "quiet" => Some("quiet"),
         "balanced" => Some("balanced"),
-        "performance" | "balanced-performance" => Some("performance"),
+        "balanced-performance" => Some("performance"),
+        "performance" => Some("gmode"),
         "low-power" => Some("battery"),
         _ => None,
     }
