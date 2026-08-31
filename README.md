@@ -37,6 +37,10 @@ sudo install -Dm644 org.andeen171.g15.policy \
   /usr/share/polkit-1/actions/org.andeen171.g15.policy
 ```
 
+Those two files are also what the `g15-cli` package installs, so delete the
+hand-installed copies before switching to it — pacman will not overwrite a file
+no package owns, and the install fails with `exists in filesystem`.
+
 ### Fan/power support (optional, needs root)
 
 Fan boost and power modes go through the WMAX ACPI method via the `acpi_call`
