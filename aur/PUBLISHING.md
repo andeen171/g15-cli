@@ -1,28 +1,16 @@
 # Publishing g15-cli to the AUR
 
-Frozen 2026-07-10: AUR user registration was disabled, so the first publish is
-pending. Everything below is ready — `aur/PKGBUILD` + `aur/.SRCINFO` are
-makepkg-tested against the `v0.1.0` tag.
+Published at <https://aur.archlinux.org/packages/g15-cli> (maintainer
+`andeen`, first push 2026-07-13). Follow *Future releases* below for every
+version after that; the one-time setup is done.
 
-## One-time setup (blocked on AUR registration reopening)
+## One-time setup (done)
 
-1. Register an account at <https://aur.archlinux.org/register>.
-2. In *My Account*, add your SSH public key (`cat ~/.ssh/id_ed25519.pub`).
-
-## First publish
-
-```sh
-git clone ssh://aur@aur.archlinux.org/g15-cli.git /tmp/aur-g15
-cp aur/PKGBUILD aur/.SRCINFO /tmp/aur-g15/
-cd /tmp/aur-g15
-git add -A
-git commit -m "g15-cli 0.1.0"
-git push
-```
-
-Cloning a non-existent package name is how the AUR creates it — the empty
-clone warning is expected. After the push, verify at
-<https://aur.archlinux.org/packages/g15-cli> and test `yay -S g15-cli`.
+1. An account at <https://aur.archlinux.org/register>.
+2. Your SSH public key added under *My Account* (`cat ~/.ssh/id_ed25519.pub`).
+3. `git clone ssh://aur@aur.archlinux.org/g15-cli.git` — cloning a
+   non-existent package name is how the AUR creates it, so the empty-clone
+   warning on the first push was expected.
 
 ## Future releases
 
@@ -52,5 +40,9 @@ cd /tmp/aur-g15 && git commit -am "g15-cli X.Y.Z" && git push
   pushes where it's stale.
 - Keep `makedepends=('cargo')` / `--frozen` builds; the AUR guidelines for
   Rust packages are followed in the current PKGBUILD.
-- If another maintainer grabs the `g15-cli` name meanwhile, either request
-  co-maintainership or publish as `g15-cli-git`.
+- After pushing, confirm the AUR actually took it — the RPC is the fastest
+  check, and it has caught a push that never landed:
+  `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=g15-cli' | grep -o '"Version":"[^"]*"'`
+- The `omarchy-g15` bar plugin needs the CLI at 0.3.0 or newer for
+  `g15 status`, so an AUR version behind that leaves plugin users with a
+  widget that reads nothing.
