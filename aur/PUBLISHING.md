@@ -56,9 +56,11 @@ eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
   pushes where it's stale.
 - Keep `makedepends=('cargo')` / `--frozen` builds; the AUR guidelines for
   Rust packages are followed in the current PKGBUILD.
-- After pushing, confirm the AUR actually took it — the RPC is the fastest
-  check, and it has caught a push that never landed:
-  `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=g15-cli' | grep -o '"Version":"[^"]*"'`
+- After pushing, confirm the AUR actually took it. Read cgit, not the RPC —
+  the RPC sits behind a cache and served the old version for minutes after a
+  successful 0.3.0 push, which looks exactly like a push that never landed:
+  `curl -s 'https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=g15-cli' | grep ^pkgver`
+  The package page agrees with cgit immediately; the RPC catches up on its own.
 - The `omarchy-g15` bar plugin needs the CLI at 0.3.0 or newer for
   `g15 status`, so an AUR version behind that leaves plugin users with a
   widget that reads nothing.
