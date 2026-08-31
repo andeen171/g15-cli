@@ -16,6 +16,9 @@ LED (no root needed):
   g15 led cycle [speed]               morph through the color spectrum
   g15 led rainbow [speed]             moving rainbow across the 4 zones
   g15 led brightness <0-100|cycle>    brightness; cycle = off -> 50% -> 100%
+  g15 led effect <name>               re-apply an effect with its saved colors
+  g15 led colors RRGGBB[,RRGGBB...]   set the current effect's color list
+  g15 led speed <1-10>                set the current effect's speed
   g15 led off | on
 
 Power/fans (root + acpi_call module):
@@ -29,6 +32,7 @@ Power/fans (root + acpi_call module):
 Desktop integration:
   g15 tui                             interactive two-tab control panel
   g15 waybar                          JSON stats for a waybar custom module
+  g15 status                          JSON stats for the omarchy bar plugin
   g15 restore                         re-apply saved LED state (autostart)";
 
 /// Color list an effect was last configured with (TUI or CLI), else spectrum.
@@ -38,6 +42,34 @@ fn saved_colors(effect: &str) -> Vec<(u8, u8, u8)> {
         .map(|l| l.split(',').filter_map(|h| parse_rgb(h).ok()).collect::<Vec<_>>())
         .filter(|v| v.len() >= 2)
         .unwrap_or_else(|| led::SPECTRUM.to_vec())
+}
+
+/// Apply `effect` with the speed and colors last saved for it. Shared by
+/// `g15 restore` (autostart) and `g15 led effect` (bar plugin).
+fn apply_saved_effect(led: &led::Led, effect: &str) -> std::io::Result<()> {
+    let saved = state::load();
+    let speed = parse_speed(saved.get("speed").map(String::as_str)).unwrap_or(5);
+    let colors = saved_colors(effect); // >=2 entries or spectrum
+    let one = saved
+        .get(&format!("colors_{effect}"))
+        .and_then(|l| parse_rgb(l.split(',').next().unwrap_or("")).ok())
+        .unwrap_or((255, 255, 255));
+    match effect {
+        "pulse" => led.pulse(one.0, one.1, one.2, speed),
+        "morph" => led.morph(colors[0], colors[1], speed),
+        "cycle" => led.cycle(&colors, speed),
+        "rainbow" => led.rainbow(&colors, speed),
+        _ => led.color(one.0, one.1, one.2),
+    }
+}
+
+/// The effect the last `g15 led` / TUI change left in the state file.
+fn current_effect() -> String {
+    state::load()
+        .get("effect")
+        .filter(|e| led::EFFECTS.contains(&e.as_str()))
+        .cloned()
+        .unwrap_or_else(|| "static".into())
 }
 
 fn parse_speed(s: Option<&str>) -> Result<u8, String> {
@@ -142,6 +174,43 @@ fn run() -> Result<(), String> {
                         state::set("speed", &speed.to_string())
                     })
                 }
+                Some("effect") => {
+                    let name = arg(2)
+                        .ok_or("usage: g15 led effect <static|pulse|morph|cycle|rainbow>")?;
+                    if !led::EFFECTS.contains(&name) {
+                        return Err(format!("unknown effect '{name}'"));
+                    }
+                    apply_saved_effect(&led, name)
+                        .and_then(|()| state::set("effect", name))
+                }
+                Some("colors") => {
+                    // Edits the current effect's list — the same `colors_<effect>`
+                    // entries the TUI's swatch row writes.
+                    let list = arg(2).ok_or("usage: g15 led colors RRGGBB[,RRGGBB...]")?;
+                    let colors: Vec<&str> = list.split(',').map(str::trim).collect();
+                    for c in &colors {
+                        parse_rgb(c)?;
+                    }
+                    let effect = current_effect();
+                    let (min, max) = led::color_limits(&effect);
+                    if colors.len() < min || colors.len() > max {
+                        return Err(format!(
+                            "{effect} takes {}",
+                            if min == max { format!("exactly {min} color(s)") } else { format!("{min}-{max} colors") }
+                        ));
+                    }
+                    let normalized: Vec<String> = colors
+                        .iter()
+                        .map(|c| c.trim_start_matches('#').to_ascii_lowercase())
+                        .collect();
+                    state::set(&format!("colors_{effect}"), &normalized.join(","))
+                        .and_then(|()| apply_saved_effect(&led, &effect))
+                }
+                Some("speed") => {
+                    let speed = parse_speed(arg(2))?;
+                    state::set("speed", &speed.to_string())
+                        .and_then(|()| apply_saved_effect(&led, &current_effect()))
+                }
                 Some(color) => {
                     let (r, g, b) = parse_rgb(color)?;
                     if let Some(p) = arg(2) {
@@ -219,7 +288,10 @@ fn run() -> Result<(), String> {
         Some("tui") => tui::run().map_err(|e| e.to_string()),
         Some("waybar") => {
             let saved = state::load();
-            let power = saved.get("power").map(String::as_str).unwrap_or("?");
+            let power = hwmon::platform_profile()
+                .as_deref()
+                .and_then(hwmon::mode_for_profile)
+                .unwrap_or_else(|| saved.get("power").map(String::as_str).unwrap_or("?"));
             match hwmon::read() {
                 Ok(s) => println!(
                     "{{\"text\": \"󰍛 {}°  󰢮 {}°\", \"tooltip\": \"CPU {}°C — fan {} rpm\\nGPU {}°C — fan {} rpm\\npower: {}\"}}",
@@ -227,6 +299,59 @@ fn run() -> Result<(), String> {
                 ),
                 Err(_) => println!("{{\"text\": \"󰌌\", \"tooltip\": \"sensors unavailable\"}}"),
             }
+            Ok(())
+        }
+        Some("status") => {
+            // Structured sibling of `waybar`, for the omarchy bar plugin's panel.
+            // Same guarantee: hwmon + state file only, never the USB device.
+            let saved = state::load();
+            let recorded = saved
+                .get("power")
+                .filter(|p| wmax::POWER_MODES.iter().any(|(n, _)| n == p))
+                .map(String::as_str)
+                .unwrap_or("unknown");
+            // The driver's own profile is the truth for every mode it can name
+            // (G-Mode included), and stays right when something other than g15
+            // changes it. The state file is only the fallback.
+            let power = hwmon::platform_profile()
+                .as_deref()
+                .and_then(hwmon::mode_for_profile)
+                .unwrap_or(recorded);
+            let effect = saved.get("effect").map(String::as_str).unwrap_or("static");
+            let brightness: u8 = saved
+                .get("brightness")
+                .and_then(|b| b.parse().ok())
+                .unwrap_or(100);
+            let speed: u8 = parse_speed(saved.get("speed").map(String::as_str)).unwrap_or(5);
+            let (min, max) = led::color_limits(effect);
+            let colors: Vec<String> = saved
+                .get(&format!("colors_{effect}"))
+                .map(|l| {
+                    l.split(',')
+                        .map(|c| c.trim().trim_start_matches('#').to_ascii_lowercase())
+                        .filter(|c| parse_rgb(c).is_ok())
+                        .take(max)
+                        .collect()
+                })
+                .filter(|v: &Vec<String>| v.len() >= min)
+                .unwrap_or_else(|| vec!["ffffff".into(); min]);
+            let color = colors[0].clone();
+            let colors_json = colors
+                .iter()
+                .map(|c| format!("\"{c}\""))
+                .collect::<Vec<_>>()
+                .join(",");
+            let s = hwmon::read().ok();
+            let ok = s.is_some();
+            let s = s.unwrap_or(hwmon::Stats { cpu: 0, gpu: 0, fan1: 0, fan2: 0, boost: 0 });
+            let boost = s.boost.min(100);
+            println!(
+                "{{\"sensors\":{ok},\"cpu\":{},\"gpu\":{},\"fan1\":{},\"fan2\":{},\
+\"power\":\"{power}\",\"boost\":{boost},\"effect\":\"{effect}\",\"brightness\":{brightness},\
+\"speed\":{speed},\"color\":\"{color}\",\"colors\":[{colors_json}],\
+\"minColors\":{min},\"maxColors\":{max}}}",
+                s.cpu, s.gpu, s.fan1, s.fan2
+            );
             Ok(())
         }
         Some("restore") => {
@@ -237,21 +362,8 @@ fn run() -> Result<(), String> {
                 .and_then(|b| b.parse().ok())
                 .unwrap_or(100);
             led.brightness(brightness).map_err(|e| e.to_string())?;
-            let speed = parse_speed(saved.get("speed").map(String::as_str)).unwrap_or(5);
             let effect = saved.get("effect").map(String::as_str).unwrap_or("static");
-            let colors = saved_colors(effect); // >=2 entries or spectrum
-            let one = saved
-                .get(&format!("colors_{effect}"))
-                .and_then(|l| parse_rgb(l.split(',').next().unwrap_or("")).ok())
-                .unwrap_or((255, 255, 255));
-            match effect {
-                "pulse" => led.pulse(one.0, one.1, one.2, speed),
-                "morph" => led.morph(colors[0], colors[1], speed),
-                "cycle" => led.cycle(&colors, speed),
-                "rainbow" => led.rainbow(&colors, speed),
-                _ => led.color(one.0, one.1, one.2),
-            }
-            .map_err(|e| e.to_string())
+            apply_saved_effect(&led, effect).map_err(|e| e.to_string())
         }
         Some("info") => {
             match led::Led::open().and_then(|l| l.fw_version()) {

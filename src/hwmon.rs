@@ -4,10 +4,11 @@ use std::fs;
 use std::io;
 
 pub struct Stats {
-    pub cpu: u32,  // °C
-    pub gpu: u32,  // °C
-    pub fan1: u32, // rpm
-    pub fan2: u32, // rpm
+    pub cpu: u32,   // °C
+    pub gpu: u32,   // °C
+    pub fan1: u32,  // rpm
+    pub fan2: u32,  // rpm
+    pub boost: u32, // % — alienware_wmi only, 0 on the dell_smm fallback
 }
 
 fn find() -> io::Result<std::path::PathBuf> {
@@ -37,5 +38,39 @@ pub fn read() -> io::Result<Stats> {
         gpu: read_u32(&dir.join("temp2_input")) / 1000,
         fan1: read_u32(&dir.join("fan1_input")),
         fan2: read_u32(&dir.join("fan2_input")),
+        // The same value `g15 fan boost` writes through WMAX, readable without
+        // root — no need to guess from what was last set.
+        boost: read_u32(&dir.join("fan1_boost")),
     })
+}
+
+/// The alienware-wmi driver's platform profile, e.g. "quiet" or "performance".
+/// World-readable, unlike the WMAX power-mode read, and it also catches mode
+/// changes made outside g15 — omarchy's own power menu writes this node.
+pub fn platform_profile() -> Option<String> {
+    fs::read_dir("/sys/class/platform-profile")
+        .ok()?
+        .filter_map(|e| e.ok())
+        .find(|e| {
+            fs::read_to_string(e.path().join("name")).unwrap_or_default().trim() == "alienware-wmi"
+        })
+        .and_then(|e| fs::read_to_string(e.path().join("profile")).ok())
+        .map(|p| p.trim().to_string())
+}
+
+/// The g15 mode name for a platform profile, where one exists.
+///
+/// On the G-series the driver applies `g_series_quirks`, which makes its
+/// `performance` profile G-Mode (0xAB) and shifts plain performance (0xA1)
+/// down to `balanced-performance` — so those two names read across, and
+/// G-Mode is visible without root after all. `custom` has no g15 name.
+pub fn mode_for_profile(profile: &str) -> Option<&'static str> {
+    match profile {
+        "quiet" => Some("quiet"),
+        "balanced" => Some("balanced"),
+        "balanced-performance" => Some("performance"),
+        "performance" => Some("gmode"),
+        "low-power" => Some("battery"),
+        _ => None,
+    }
 }

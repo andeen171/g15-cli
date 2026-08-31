@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+
+<!--
+  Lets the bar plugin (and anyone else) run `pkexec g15 power ...` / `... fan
+  boost ...` and get a password prompt from the desktop's polkit agent, instead
+  of needing a NOPASSWD sudoers entry for those commands.
+
+  auth_admin_keep caches the authorization for a few minutes, so dragging the
+  fan slider does not ask once per drag. Without this file pkexec still works —
+  it falls back to org.freedesktop.policykit.exec, which prompts every time and
+  names the binary rather than what it is about to do.
+-->
+<policyconfig>
+  <vendor>g15</vendor>
+  <vendor_url>https://github.com/andeen171/g15-cli</vendor_url>
+
+  <action id="org.andeen171.g15.control">
+    <description>Control Dell G15 fans and power modes</description>
+    <description xml:lang="pt_BR">Controlar ventoinhas e modos de energia do Dell G15</description>
+    <message>Authentication is required to change the G15 power mode or fan boost</message>
+    <message xml:lang="pt_BR">Autenticação necessária para alterar o modo de energia ou a ventoinha do G15</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/g15</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+</policyconfig>
