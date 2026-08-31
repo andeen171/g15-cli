@@ -151,36 +151,23 @@ Hyprland: `exec-once = g15 restore` (Omarchy lua config:
 
 ### Bar module
 
-**Omarchy 4 (Quickshell shell) — the plugin.** `omarchy-plugin/` in this repo is
-a bar-widget plugin (`io.github.andeen171.g15`): CPU/GPU temps in the bar, and a
-panel with temperature meters, power-mode chips, a fan-boost slider, and the
-whole backlight — brightness, effect, speed, and the effect's color list with
-an HSV picker (presets, hex field, hyprpicker eyedropper). Right click opens
-the TUI for the same controls from the keyboard.
-
-The two privileged controls (power mode, fan boost) run through `pkexec`, so
-the shell's polkit dialog asks for a password instead of needing a sudoers
-whitelist.
-
-Install by copy (the shell only loads plugins from `~/.config/omarchy/plugins/`,
-and refuses symlinks):
+**Omarchy 4 (Quickshell shell) — the plugin.** Lives in its own repo now:
+[andeen171/omarchy-g15](https://github.com/andeen171/omarchy-g15), a bar-widget
+plugin (`io.github.andeen171.g15`) with CPU/GPU temps in the bar, and a panel
+with temperature meters, power-mode chips, a fan-boost slider, and the whole
+backlight — brightness, effect, speed, and the effect's color list with an HSV
+picker (presets, hex field, hyprpicker eyedropper). Right click opens the TUI
+for the same controls from the keyboard.
 
 ```sh
-cp -r omarchy-plugin ~/.config/omarchy/plugins/io.github.andeen171.g15
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.andeen171.g15
-omarchy-shell shell rescanPlugins
+omarchy plugin add https://github.com/andeen171/omarchy-g15.git --enable
 omarchy plugin enable io.github.andeen171.g15 left
 ```
 
-Settings (refresh interval, temps-or-glyph in the bar, the power and TUI
-commands) are editable in Setup > Plugins, or inline in the widget's
-`~/.config/omarchy/shell.json` entry.
-
-It installs by copy rather than `omarchy plugin add`, because that command
-wants the repo root to be the plugin and this one is a subdirectory — see
-[omarchy-plugin/README.md](omarchy-plugin/README.md) for why it stays here for
-now, how to split it out later, and the polkit policy that lets the power and
-fan controls ask for your password instead of running unauthenticated.
+It needs this CLI at 0.3.0 or newer for `g15 status`. The two privileged
+controls (power mode, fan boost) run through `pkexec`, so the shell's polkit
+dialog asks for a password instead of needing a sudoers whitelist — the
+`g15-cli` package installs the action that names the operation.
 
 Every read is `g15 status` — hwmon, the driver's platform profile, and the
 state file, never the USB device — so polling can never wedge the controller.

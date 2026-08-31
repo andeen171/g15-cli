@@ -84,10 +84,10 @@ Apply with `sudo systemd-hwdb update && sudo udevadm trigger
   state at session start (over USB — never sysfs).
 - Bar widget: Omarchy 4 replaced waybar with the Quickshell `omarchy-shell`, so
   the module is now the `io.github.andeen171.g15` **plugin** from
-  `omarchy-plugin/` in this repo, copied to
-  `~/.config/omarchy/plugins/io.github.andeen171.g15` and enabled in the bar's
-  left section (see README → Bar module). It polls `g15 status` (hwmon + state
-  file only, never the USB device) every 5 s; left click opens a panel with
+  [andeen171/omarchy-g15](https://github.com/andeen171/omarchy-g15), installed
+  with `omarchy plugin add` and enabled in the bar's left section (see
+  README → Bar module). It polls `g15 status` (hwmon, the driver's platform
+  profile and the state file, never the USB device) every 5 s; left click opens a panel with
   temperature meters, power-mode chips, a fan-boost slider and the full
   backlight controls (brightness, effect, speed, color list, HSV picker), right
   click launches the TUI via `omarchy-launch-or-focus-tui g15-tui`.
