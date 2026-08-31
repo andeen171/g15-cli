@@ -1,6 +1,6 @@
 # Maintainer: andeen171 <zeanderpreys@gmail.com>
 pkgname=g15-cli
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="Keyboard backlight, fan and power control for Dell G15 laptops (AW-ELC 187c:0550)"
 arch=('x86_64')
@@ -12,10 +12,10 @@ optdepends=(
   'acpi_call: fan boost and power mode control'
   'acpi_call-dkms: fan boost and power mode control (non-stock kernels)'
   'hyprpicker: pick colors from the screen in the TUI and the bar plugin'
-  'polkit: password prompt for the bar plugin\'s power and fan controls'
+  'polkit: password prompt for the power and fan controls in the bar plugin'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('ee96196a5bfd6252ab3bfeddaf0c490878b2a757121f4d41ae7a7d62607a1652')
+sha256sums=('e996ad4bf99d98611d1f4868fc5c6718b75294f121e5fc0573a220b66aed5d79')
 
 prepare() {
   cd "$pkgname-$pkgver"
