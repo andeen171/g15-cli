@@ -61,6 +61,7 @@ eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
   successful 0.3.0 push, which looks exactly like a push that never landed:
   `curl -s 'https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=g15-cli' | grep ^pkgver`
   The package page agrees with cgit immediately; the RPC catches up on its own.
-- The `omarchy-g15` bar plugin needs the CLI at 0.3.0 or newer for
-  `g15 status`, so an AUR version behind that leaves plugin users with a
-  widget that reads nothing.
+- The `omarchy-g15` bar plugin needs the CLI at 0.3.1 or newer — it reads the
+  version out of `g15 status` and disables the power and fan controls below
+  that, so an AUR version behind the floor leaves plugin users with a widget
+  that reads but cannot set.
