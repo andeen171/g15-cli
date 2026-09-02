@@ -8,10 +8,13 @@
   boost ...` and get a password prompt from the desktop's polkit agent, instead
   of needing a NOPASSWD sudoers entry for those commands.
 
-  auth_admin_keep caches the authorization for a few minutes, so dragging the
-  fan slider does not ask once per drag. Without this file pkexec still works —
-  it falls back to org.freedesktop.policykit.exec, which prompts every time and
-  names the binary rather than what it is about to do.
+  Every invocation authenticates: no auth_admin_keep, so an authorization is
+  never retained past the command it was granted for. polkit pins the
+  executable but cannot filter its arguments, so g15 narrows the grant itself —
+  a run that arrived through pkexec refuses anything but `power <mode>` and
+  `fan boost <0-100>`. Without this file pkexec still works, falling back to
+  org.freedesktop.policykit.exec, which names the binary rather than what it is
+  about to do.
 -->
 <policyconfig>
   <vendor>g15</vendor>
@@ -25,7 +28,7 @@
     <defaults>
       <allow_any>auth_admin</allow_any>
       <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
+      <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/g15</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>

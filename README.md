@@ -168,10 +168,14 @@ omarchy plugin add https://github.com/andeen171/omarchy-g15.git --enable
 omarchy plugin enable io.github.andeen171.g15 left
 ```
 
-It needs this CLI at 0.3.0 or newer for `g15 status`. The two privileged
-controls (power mode, fan boost) run through `pkexec`, so the shell's polkit
-dialog asks for a password instead of needing a sudoers whitelist — the
-`g15-cli` package installs the action that names the operation.
+It needs this CLI at 0.3.1 or newer, and checks: `g15 status` reports its
+version, and the plugin disables the two privileged controls below that. Those
+two (power mode, fan boost) run through `pkexec` on the absolute path the
+polkit action names, so the shell's polkit dialog asks for a password instead
+of needing a sudoers whitelist. polkit pins the executable but not its
+arguments, so `g15` narrows the grant itself — invoked with `PKEXEC_UID` set it
+runs `power <mode>` and `fan boost <0-100>` and refuses the rest of the CLI.
+`sudo g15 …` and a root shell are unaffected.
 
 Every read is `g15 status` — hwmon, the driver's platform profile, and the
 state file, never the USB device — so polling can never wedge the controller.

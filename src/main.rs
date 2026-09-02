@@ -95,6 +95,21 @@ fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let arg = |i: usize| args.get(i).map(String::as_str);
 
+    // polkit can pin the executable but not its arguments, so `pkexec g15`
+    // would otherwise hand root the whole CLI. Narrow the grant here, in the
+    // binary the policy trusts: an invocation that arrived through pkexec may
+    // only do the two things the polkit action names. `sudo g15 ...` and a
+    // root shell are untouched — this reads PKEXEC_UID, which pkexec sets in
+    // the child itself.
+    if std::env::var_os("PKEXEC_UID").is_some()
+        && !matches!(
+            (arg(0), arg(1)),
+            (Some("power"), Some(_)) | (Some("fan"), Some("boost"))
+        )
+    {
+        return Err("pkexec runs only `g15 power <mode>` or `g15 fan boost <0-100>`".into());
+    }
+
     match arg(0) {
         Some("led") => {
             let led = led::Led::open().map_err(|e| e.to_string())?;
@@ -346,11 +361,12 @@ fn run() -> Result<(), String> {
             let s = s.unwrap_or(hwmon::Stats { cpu: 0, gpu: 0, fan1: 0, fan2: 0, boost: 0 });
             let boost = s.boost.min(100);
             println!(
-                "{{\"sensors\":{ok},\"cpu\":{},\"gpu\":{},\"fan1\":{},\"fan2\":{},\
+                "{{\"version\":\"{v}\",\"sensors\":{ok},\"cpu\":{},\"gpu\":{},\"fan1\":{},\"fan2\":{},\
 \"power\":\"{power}\",\"boost\":{boost},\"effect\":\"{effect}\",\"brightness\":{brightness},\
 \"speed\":{speed},\"color\":\"{color}\",\"colors\":[{colors_json}],\
 \"minColors\":{min},\"maxColors\":{max}}}",
-                s.cpu, s.gpu, s.fan1, s.fan2
+                s.cpu, s.gpu, s.fan1, s.fan2,
+                v = env!("CARGO_PKG_VERSION")
             );
             Ok(())
         }
