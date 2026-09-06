@@ -136,5 +136,21 @@ name). The omarchy repo stays pristine, so updates pull cleanly. Blacklisting
 battery charge-control thresholds in use here. The 2-min watchdog stays as the
 tripwire for any new writer.
 
+**2026-09-06 — wedged again on lock; Omarchy 4 defeated the shim.** Three locks,
+`brightnessctl` save file (`$XDG_RUNTIME_DIR/brightnessctl/leds/dell::kbd_backlight`)
+rewritten at 15:05 during the lock, probe = echo-mode acks. The writer is still
+`omarchy-brightness-keyboard off`, now fired by the Quickshell lock's blank timer
+(`shell/plugins/lock/Service.qml`). What changed: `default/hypr/envs.lua`
+unconditionally puts `$OMARCHY_PATH/bin` at PATH position 1, so the `~/.local/bin`
+shim lost; `~/.config/uwsm/env` (the old ordering) no longer exists; and the shim,
+`bindings.lua` and `g15-wedge-watch` still pointed at `~/.cargo/bin/g15`, which is
+gone (package build lives at `/usr/bin/g15`). Fix: `~/.config/hypr/hyprland.lua`
+re-sets `hl.env("PATH", ~/.local/bin:$PATH)` right after
+`require("default.hypr.omarchy")` — last `env` wins in Hyprland — and all three
+scripts use `/usr/bin/g15`. Check after any Omarchy upgrade:
+`env -i PATH="$(tr '\0' '\n' </proc/$(pgrep -x quickshell)/environ | sed -n 's/^PATH=//p')" bash -c 'command -v omarchy-brightness-keyboard'`
+must print the `~/.local/bin` shim. File perms cannot guard this: `brightnessctl`
+writes through logind (`org.freedesktop.login1 SetBrightness`), i.e. as root.
+
 Working reference: `led-test.py` (`python3 led-test.py RR GG BB [dim]`, no root
 needed with the uaccess udev rule / existing ACL on /dev/hidraw0).
