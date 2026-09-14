@@ -110,7 +110,17 @@ Apply with `sudo systemd-hwdb update && sudo udevadm trigger
 Reinstall note: plugins live in `~/.config`, so the AUR package cannot ship the
 widget — the copy step above is part of the restore checklist.
 
-## 5. Wedge watchdog (dormant)
+## 5. Kernel: `acpi_call-dkms`, not `acpi_call`
+
+Omarchy ships its own kernel (`linux-omarchy`, installed here 2026-09-14). The
+prebuilt `acpi_call` package only carries a module for the stock `linux`
+kernel, so after the switch `/proc/acpi/call` vanished and every power-mode
+change from the plugin blinked and reverted (the CLI error is
+`/proc/acpi/call missing`). `sudo pacman -S acpi_call-dkms` replaces it and
+dkms builds for both kernels (`linux-omarchy-headers` is pulled in with the
+kernel). After any kernel update: `ls /proc/acpi/call` — if missing, this is why.
+
+## 6. Wedge watchdog (dormant)
 
 `~/.local/bin/g15-wedge-watch` + systemd user timer caught the lock-path
 trigger, then was disabled 2026-07-14 for false positives. Re-arm when

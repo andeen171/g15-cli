@@ -47,10 +47,23 @@ Fan boost and power modes go through the WMAX ACPI method via the `acpi_call`
 kernel module:
 
 ```sh
-sudo pacman -S acpi_call        # or acpi_call-dkms / acpi_call-lts
+sudo pacman -S acpi_call-dkms   # not acpi_call — see below
 echo acpi_call | sudo tee /etc/modules-load.d/acpi_call.conf
 sudo modprobe acpi_call
 ```
+
+Prefer `acpi_call-dkms` over the prebuilt `acpi_call`: the prebuilt module only
+matches the stock `linux` kernel, so the first time your distro boots a
+different one (Omarchy switched to `linux-omarchy` on 2026-09-14) it silently
+disappears — `g15 power <mode>` fails, and a UI that shows the mode
+optimistically blinks it and falls back to the current one. Symptom check:
+
+```sh
+ls /proc/acpi/call || sudo modprobe acpi_call
+# modprobe: FATAL: Module acpi_call not found in directory /lib/modules/$(uname -r)
+```
+
+`acpi_call-dkms` rebuilds for every installed kernel with headers.
 
 ## Protecting the controller
 
